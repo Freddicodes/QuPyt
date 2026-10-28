@@ -30,8 +30,10 @@ dependencies = [
 #author = 'Karl Briegel'
 #author_email = 'karl.briegel@tum.de'
 
-[tool.setuptools.packages]
-find = {}
+[tool.setuptools.packages.find]
+include = ["qupyt*"]
+# disables automatic namespace import
+namespaces = false
 
 [tool.setuptools_scm]
 write_to = "qupyt/_version.py"
