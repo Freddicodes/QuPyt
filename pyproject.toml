@@ -10,25 +10,31 @@ description = 'Provide a framework for quantum sensing experiments'
 license = {text = 'No license of for commercial or non-commercial use is granted'}
 dependencies = [
     'numpy', 
-    'scipy',
-    'harvesters',
-    'matplotlib',
-    'nidaqmx',
-    'numpy',
-    'pulsestreamer',
-    'pypylon',
+    'PyYAML',
+    'pydantic',
+    'watchdog',
+    'tqdm',
+    'termcolor',
     'pyserial',
     'PyVISA',
-    'pyvisa-py',
-    'PyYAML',
-    'termcolor',
-    'tqdm',
-    'watchdog==3.0.0',
-    'windfreak',
-    'pydantic',
+    'pyvisa-py'
 ]
-#author = 'Karl Briegel'
-#author_email = 'karl.briegel@tum.de'
+authors =  [
+    { name = "Karl Briegel", email = "karl.briegel@tum.de" },
+    { name = "Julia Draeger", email = "julia.draeger@tum.de" }
+]
+maintainers = [
+    { name = "Julia Draeger", email = "julia.draeger@tum.de" }
+]
+
+[project.optional-dependencies]
+basler          = ['pypylon']
+genicam         = ['harvesters']
+daq             = ['nidaqmx']
+pulsestreamer   = ['pulsestreamer']
+windfreak       = ['windfreak']
+plot            = ['matplotlib']
+all             = ["qupyt[basler,genicam,daq,pulsestreamer,windfreak,plot]"]
 
 [tool.setuptools.packages.find]
 include = ["qupyt*"]
@@ -74,7 +80,7 @@ configurationSources = ["pyproject.toml"]
 
 [tool.pylsp.plugins.pylint]
 enabled = true
-args = ["--disable=line-too-long",
-"--enable=logging-format-interpolation",
-"--disable=logging-fstring-interpolation"]
-# disable = ["logging-format-interpolation", "logging-not-lazy"]
+args = [
+    "--disable=line-too-long,logging-fstring-interpolation",
+    "--enable=logging-format-interpolation",
+]
