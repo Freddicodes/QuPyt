@@ -1,7 +1,9 @@
+"""Tests for qupyt.mixins.
+
+ConfigurationMixin (applying a configuration dict through the attribute_map)
+and the configuration error classes.
 """
-qupyt.mixins: ConfigurationMixin (applying a configuration dict through the
-attribute_map) and the configuration error classes.
-"""
+
 from typing import Any
 
 import pytest
@@ -32,24 +34,24 @@ class Configurable(ConfigurationMixin):
         raise KeyError("SetFreq1")
 
 
-def test_setters_are_called_in_config_order_with_their_value():
+def test_setters_are_called_in_config_order_with_their_value() -> None:
     device = Configurable()
     device._update_from_configuration({"amplitude": -10, "frequency": 2.87e9})
     assert device.calls == [("amplitude", -10), ("frequency", 2.87e9)]
 
 
-def test_empty_configuration_calls_nothing():
+def test_empty_configuration_calls_nothing() -> None:
     device = Configurable()
     device._update_from_configuration({})
     assert device.calls == []
 
 
-def test_unknown_key_raises_key_error():
+def test_unknown_key_raises_key_error() -> None:
     with pytest.raises(KeyError, match="Unknown attribute: frequncy"):
         Configurable()._update_from_configuration({"frequncy": 1})
 
 
-def test_unknown_key_error_is_not_chained():
+def test_unknown_key_error_is_not_chained() -> None:
     # `raise ... from None`: the traceback shows one error, not the internal
     # dict lookup "during handling of the above exception".
     with pytest.raises(KeyError) as exc_info:
@@ -58,14 +60,14 @@ def test_unknown_key_error_is_not_chained():
     assert exc_info.value.__suppress_context__
 
 
-def test_keys_before_an_unknown_key_are_already_applied():
+def test_keys_before_an_unknown_key_are_already_applied() -> None:
     device = Configurable()
     with pytest.raises(KeyError):
         device._update_from_configuration({"frequency": 1, "nope": 2, "amplitude": 3})
     assert device.calls == [("frequency", 1)]
 
 
-def test_key_error_inside_a_setter_is_not_reported_as_unknown_attribute():
+def test_key_error_inside_a_setter_is_not_reported_as_unknown_attribute() -> None:
     # Regression: the try/except used to wrap the setter call as well, so this
     # surfaced as "Unknown attribute: broken" and hid the real cause.
     with pytest.raises(KeyError) as exc_info:
@@ -74,34 +76,46 @@ def test_key_error_inside_a_setter_is_not_reported_as_unknown_attribute():
     assert "Unknown attribute" not in str(exc_info.value)
 
 
-def test_other_errors_inside_a_setter_pass_through():
+def test_other_errors_inside_a_setter_pass_through() -> None:
     device = Configurable()
-    device.attribute_map["frequency"] = lambda v: int("not a number")
+
+    def setter(value: object) -> None:
+        int("not a number")
+
+    device.attribute_map["frequency"] = setter
     with pytest.raises(ValueError, match="invalid literal"):
         device._update_from_configuration({"frequency": 1})
 
 
 # --- error classes ------------------------------------------------------------------
 
-def test_configuration_error_message_names_value_and_valid_options():
+
+def test_configuration_error_message_names_value_and_valid_options() -> None:
     error = ConfigurationError("Burst mode", "nonsense", ["off", "gate"])
     assert "nonsense" in str(error)
     assert "['off', 'gate']" in str(error)
 
 
-@pytest.mark.parametrize("error_cls, kind", [
-    (UnknownSensorError, "sensor"),
-    (UnknownSynchroniserError, "synchroniser"),
-    (UnknownDeviceError, "device"),
-])
-def test_unknown_hardware_error_message(error_cls, kind):
+@pytest.mark.parametrize(
+    "error_cls, kind",
+    [
+        (UnknownSensorError, "sensor"),
+        (UnknownSynchroniserError, "synchroniser"),
+        (UnknownDeviceError, "device"),
+    ],
+)
+def test_unknown_hardware_error_message(error_cls: Any, kind: Any) -> None:
     error = error_cls("Foo", ["A", "B"])
     assert str(error) == f"Unknown {kind} type 'Foo'. Available: ['A', 'B']"
     assert error.config_param == f"the {kind} type"
 
 
-@pytest.mark.parametrize("error_cls", [UnknownSensorError, UnknownSynchroniserError, UnknownDeviceError])
-def test_unknown_hardware_errors_are_configuration_and_value_errors(error_cls):
+@pytest.mark.parametrize(
+    "error_cls", [UnknownSensorError, UnknownSynchroniserError, UnknownDeviceError]
+)
+def test_unknown_hardware_errors_are_configuration_and_value_errors(
+    error_cls: Any,
+) -> None:
     # Existing `except ConfigurationError` / `except ValueError` blocks keep catching them.
     assert issubclass(error_cls, UnknownHardwareTypeError)
     assert issubclass(error_cls, ConfigurationError)

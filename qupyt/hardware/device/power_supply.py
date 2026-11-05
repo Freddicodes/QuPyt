@@ -1,5 +1,4 @@
-"""
-Power supply remote control.
+"""Power supply remote control.
 
 All power supplies share the :class:`PowerSupply` base class, which defines
 the configuration keys and their validation. A concrete model only implements
@@ -28,6 +27,7 @@ Power supplies belong under ``static_devices``. Dynamic devices only get the
 swept (numeric) parameters for each step, so ``output`` would be missing and
 the output switched off in every step.
 """
+
 import logging
 from abc import abstractmethod
 from typing import Any, ClassVar
@@ -42,8 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 class PowerSupply(Device):
-    """
-    Abstract base class for all power supplies.
+    """Abstract base class for all power supplies.
 
     It defines the configuration keys every power supply accepts and how they
     are validated. Concrete models only implement the hardware part
@@ -53,9 +52,11 @@ class PowerSupply(Device):
     from the configuration are not left unchanged but set to :attr:`DEFAULTS`,
     so the hardware always matches the configuration.
 
-    Arguments:
-        - **configuration** (dict | None): Configuration dictionary, see the
-          module documentation for the accepted keys.
+    Parameters
+    ----------
+    configuration : dict | None
+        Configuration dictionary, see the
+        module documentation for the accepted keys.
     """
 
     #: Applied for every key the configuration does not set
@@ -69,27 +70,40 @@ class PowerSupply(Device):
         self.attribute_map["output"] = self.set_output
 
     def set_values(self) -> None:
-        """
-        Apply the configuration, with :attr:`DEFAULTS` for every missing key.
+        """Apply the configuration, with :attr:`DEFAULTS` for every missing key.
 
-        :raises ConfigurationError: if a value is invalid.
-        :raises KeyError: if the configuration contains an unknown key.
+        Raises
+        ------
+        ConfigurationError
+            if a value is invalid.
+        KeyError
+            if the configuration contains an unknown key.
         """
         self._update_from_configuration({**self.DEFAULTS, **(self.configuration or {})})
 
     def set_output(self, value: str | bool) -> None:
-        """
-        Switch the output on or off.
+        """Switch the output on or off.
 
-        :param value: ``"on"`` / ``"off"`` (any case), or a bool, which is what
+        Parameters
+        ----------
+        value : str | bool
+            ``"on"`` / ``"off"`` (any case), or a bool, which is what
             YAML makes of unquoted on/off/yes/no/true/false.
-        :type value: str | bool
-        :raises ConfigurationError: for any other value.
+
+        Raises
+        ------
+        ConfigurationError
+            for any other value.
         """
         if isinstance(value, bool):
             value = "on" if value else "off"
-        if not isinstance(value, str) or value.strip().lower() not in self.OUTPUT_STATES:
-            raise ConfigurationError("power supply output", value, list(self.OUTPUT_STATES))
+        if (
+            not isinstance(value, str)
+            or value.strip().lower() not in self.OUTPUT_STATES
+        ):
+            raise ConfigurationError(
+                "power supply output", value, list(self.OUTPUT_STATES)
+            )
         state = value.strip().lower()
 
         self._apply_output(state == "on")
@@ -105,42 +119,54 @@ class PowerSupply(Device):
 
     @abstractmethod
     def _apply_output(self, on: bool) -> None:
-        """
-        Send the output command to the hardware. Called by :meth:`set_output`
-        after validation.
+        """Send the output command to the hardware.
 
-        :param on: ``True`` to switch the output on, ``False`` to switch it off.
-        :type on: bool
+        Called by :meth:`set_output` after validation.
+
+        Parameters
+        ----------
+        on : bool
+            ``True`` to switch the output on, ``False`` to switch it off.
         """
 
 
 class KonradKD3000(PowerSupply, device_types=("KonradKD3000",)):
-    """
-    Konrad power supply controlled via a serial connection
-    (``OUT1`` / ``OUT0`` commands). The exact supported models are still to
-    be confirmed.
+    """Konrad power supply controlled via a serial connection (``OUT1`` / ``OUT0`` commands).
+
+    The exact supported models are still to be confirmed.
 
     Registered as ``'KonradKD3000'``.
 
-    Arguments:
-        - **address** (str): Serial port of the power supply, e.g.
-          ``'/dev/tty.usbserial-1'`` or ``'COM3'``.
-        - **configuration** (dict | None): Configuration dictionary, see
-          :class:`PowerSupply`.
+    Parameters
+    ----------
+    address : str
+        Serial port of the power supply, e.g.
+        ``'/dev/tty.usbserial-1'`` or ``'COM3'``.
+    configuration : dict | None
+        Configuration dictionary, see
+        :class:`PowerSupply`.
 
-    Attributes:
+    Attributes
+    ----------
         - **instance** (serial.Serial): The open serial connection.
     """
 
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
-        """
-        Open the serial connection to the power supply.
+        """Open the serial connection to the power supply.
 
-        :raises serial.SerialException: if the port cannot be opened.
+        Raises
+        ------
+        serial.SerialException
+            if the port cannot be opened.
         """
         super().__init__(configuration)
         self.address: str = address
-        self.instance: serial.Serial = serial.Serial(self.address, timeout=1)
+        try:
+            self.instance: serial.Serial = serial.Serial(self.address, timeout=1)
+        except ValueError, serial.SerialException:
+            logger.exception("Connection to power supply %s failed", address)
+            raise
+        self._is_open = True
         logger.info(f"Connected to power supply {address}".ljust(65, ".") + "[done]")
 
     def __repr__(self) -> str:
@@ -150,15 +176,30 @@ class KonradKD3000(PowerSupply, device_types=("KonradKD3000",)):
         return f"Power supply of type {type(self).__name__}(address: {self.address})"
 
     def close(self) -> None:
-        """Close the serial connection to the power supply."""
+        """Close the serial connection to the power supply (safe to call twice)."""
+        if not getattr(self, "_is_open", False):
+            return
         self.instance.close()
+        self._is_open = False
         logger.info(f"Closed power supply {self.address}".ljust(65, ".") + "[done]")
 
     def _apply_output(self, on: bool) -> None:
-        """
-        Write ``OUT1`` (on) or ``OUT0`` (off) to the serial port.
+        """Write ``OUT1`` (on) or ``OUT0`` (off) to the serial port.
 
-        :param on: ``True`` to switch the output on, ``False`` to switch it off.
-        :type on: bool
+        Parameters
+        ----------
+        on : bool
+            ``True`` to switch the output on, ``False`` to switch it off.
         """
-        self.instance.write(b"OUT1" if on else b"OUT0")
+        state = "ON" if on else "OFF"
+        try:
+            self.instance.write(b"OUT1" if on else b"OUT0")
+        except Exception:
+            logger.exception(
+                "Failed to turn %s power supply output at %s", state, self.address
+            )
+            raise
+        logger.info(
+            f"Turned {state} power supply output at {self.address}".ljust(65, ".")
+            + "[done]"
+        )

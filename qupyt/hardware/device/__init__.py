@@ -1,7 +1,7 @@
-"""
-Device classes. Every module in this package is imported here, so each
-subclass registers itself (``device_types=...``) and can be created with
-:meth:`Device.create`.
+"""Device classes.
+
+Every module in this package is imported here, so each subclass registers
+itself (``device_types=...``) and can be created with :meth:`Device.create`.
 """
 
 import importlib

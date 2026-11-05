@@ -1,7 +1,7 @@
-"""
-Sensor classes. Every module in this package is imported here, so each
-subclass registers itself (``sensor_types=...``) and can be created with
-:meth:`Sensor.create`.
+"""Sensor classes.
+
+Every module in this package is imported here, so each subclass registers
+itself (``sensor_types=...``) and can be created with :meth:`Sensor.create`.
 """
 
 import importlib

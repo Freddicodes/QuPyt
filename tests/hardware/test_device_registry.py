@@ -1,20 +1,22 @@
+"""Tests for Device registry.
+
+which device_type name creates which class, and with which constructor
+arguments. Measurement YAML files rely on these names. Registration mechanics
+are tested in test_registry.py, the VISA connection in test_visa_handler.py and
+the Mock's configuration in test_signal_mock.py. All device creation goes
+through `create()` below.
 """
-Device registry: which device_type name creates which class, and with which
-constructor arguments. Measurement YAML files rely on these names.
-Registration mechanics are tested in test_registry.py, the VISA connection
-in test_visa_handler.py and the Mock's configuration in test_signal_mock.py.
-All device creation goes through `create()` below.
-"""
+
 import sys
 import types
+from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+import pyvisa
+import serial
 from pyvisa.resources import MessageBasedResource
 
-import pytest
-import serial
-
-from qupyt.hardware import visa_handler
 from qupyt.hardware.device import Device
 from qupyt.hardware.device.power_supply import KonradKD3000
 from qupyt.hardware.device.signal_mock import MockSignalSource
@@ -52,23 +54,25 @@ EXPECTED_CLASSES = {
 }
 
 
-def create(device_type: str, config: dict | None = None, address: str = ADDRESS):
-    """The one place that creates devices."""
+def create(
+    device_type: str, config: dict[str, Any] | None = None, address: str = ADDRESS
+) -> Any:
+    """Create a device (the one place tests create devices)."""
     return Device.create(device_type, address, config or {})
 
 
 @pytest.fixture(autouse=True)
-def resource_manager(monkeypatch):
+def resource_manager(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Fake pyvisa: open_resource returns a MagicMock instrument."""
     rm = MagicMock()
     # spec: VisaObject requires a message-based resource (isinstance check)
     rm.open_resource.return_value = MagicMock(spec=MessageBasedResource)
-    monkeypatch.setattr(visa_handler.pyvisa, "ResourceManager", MagicMock(return_value=rm))
+    monkeypatch.setattr(pyvisa, "ResourceManager", MagicMock(return_value=rm))
     return rm
 
 
 @pytest.fixture(autouse=True)
-def serial_port(monkeypatch):
+def serial_port(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Fake serial.Serial, used by KonradKD3000 and the WindFreak SNV / HDM / SHDMini classes."""
     port = MagicMock()
     monkeypatch.setattr(serial, "Serial", MagicMock(return_value=port))
@@ -76,9 +80,9 @@ def serial_port(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def windfreak_package(monkeypatch):
+def windfreak_package(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Fake 'windfreak' package for WindFreakOfficial."""
-    fake = types.ModuleType("windfreak")
+    fake: Any = types.ModuleType("windfreak")
     fake.SynthHD = MagicMock()
     monkeypatch.setitem(sys.modules, "windfreak", fake)
     return fake
@@ -86,49 +90,62 @@ def windfreak_package(monkeypatch):
 
 # --- which name creates which class ------------------------------------------------
 
+
 @pytest.mark.parametrize("device_type, expected_cls", EXPECTED_CLASSES.items())
-def test_device_type_creates_class(device_type, expected_cls):
+def test_device_type_creates_class(device_type: Any, expected_cls: Any) -> None:
     # Exact class, not isinstance: SRS/TekAWG must not get a VISA subclass.
     assert type(create(device_type)) is expected_cls
 
 
-def test_registry_has_exactly_the_known_names():
+def test_registry_has_exactly_the_known_names() -> None:
     # Exact list: a missing or renamed registration breaks existing YAML files.
     assert Device.available() == sorted(EXPECTED_CLASSES)
 
 
-@pytest.mark.parametrize("device_type", ["KonradKD3000", "Mock", "SRS", "SMA", "Rigol", "WindFreakHDM", "WindFreak"])
-def test_address_is_stored(device_type):
+@pytest.mark.parametrize(
+    "device_type",
+    ["KonradKD3000", "Mock", "SRS", "SMA", "Rigol", "WindFreakHDM", "WindFreak"],
+)
+def test_address_is_stored(device_type: Any) -> None:
     assert create(device_type, address="ADDR-42").address == "ADDR-42"
 
 
 # --- VISA devices -----------------------------------------------------------------
 
-@pytest.mark.parametrize("device_type", ["SRS", "TekAWG", "SMA", "SMB", "Rigol", "TekAFG"])
-def test_visa_device_gets_its_device_type_as_s_type(resource_manager, device_type):
+
+@pytest.mark.parametrize(
+    "device_type", ["SRS", "TekAWG", "SMA", "SMB", "Rigol", "TekAFG"]
+)
+def test_visa_device_gets_its_device_type_as_s_type(
+    resource_manager: Any, device_type: Any
+) -> None:
     device = create(device_type)
     assert device.s_type == device_type
     assert device.instance is resource_manager.open_resource.return_value
     resource_manager.open_resource.assert_called_once_with(ADDRESS)
 
 
-
 # --- WindFreak devices -------------------------------------------------------------
 
-@pytest.mark.parametrize("device_type", ["WindFreakHDM", "WindFreakSHDMini", "WindFreakSNV"])
-def test_serial_windfreak_opens_the_port(serial_port, device_type):
+
+@pytest.mark.parametrize(
+    "device_type", ["WindFreakHDM", "WindFreakSHDMini", "WindFreakSNV"]
+)
+def test_serial_windfreak_opens_the_port(serial_port: Any, device_type: Any) -> None:
     device = create(device_type, address="/dev/tty.usbmodem1")
     serial.Serial.assert_called_once_with("/dev/tty.usbmodem1", timeout=1)
     assert device.instance is serial_port
 
 
-def test_windfreak_official_uses_the_windfreak_package(windfreak_package):
+def test_windfreak_official_uses_the_windfreak_package(windfreak_package: Any) -> None:
     device = create("WindFreak", address="/dev/tty.usbmodem1")
     windfreak_package.SynthHD.assert_called_once_with("/dev/tty.usbmodem1")
     device.instance.init.assert_called_once_with()
 
 
-def test_windfreak_without_package_raises_import_error(monkeypatch):
+def test_windfreak_without_package_raises_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "windfreak", None)
     with pytest.raises(ImportError, match="needs package 'windfreak'") as exc_info:
         create("WindFreak")
@@ -137,7 +154,8 @@ def test_windfreak_without_package_raises_import_error(monkeypatch):
 
 # --- unknown names -----------------------------------------------------------------
 
-def test_unknown_device_type_opens_no_connection(resource_manager):
+
+def test_unknown_device_type_opens_no_connection(resource_manager: Any) -> None:
     with pytest.raises(UnknownDeviceError):
         create("NotADevice")
     resource_manager.open_resource.assert_not_called()

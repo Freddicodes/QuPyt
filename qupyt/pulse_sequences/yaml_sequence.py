@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""
-Generation of yaml file based pulse sequences.
-"""
+"""Generation of yaml file based pulse sequences."""
+
+import logging
 import re
 from collections.abc import Sequence
 from typing import Any
@@ -11,10 +11,11 @@ import yaml
 
 from qupyt import set_up
 
+logger = logging.getLogger(__name__)
+
 
 class YamlSequence:
-    """
-    Build a pulse sequence YAML file for QuPyt's synchronisers.
+    """Build a pulse sequence YAML file for QuPyt's synchronisers.
 
     Call order::
 
@@ -27,7 +28,10 @@ class YamlSequence:
     ``sequencing_order`` and ``sequencing_repeats`` must be set before
     :meth:`write` (``AttributeError`` otherwise).
 
-    :param duration: ``total_duration`` of every block, in µs.
+    Parameters
+    ----------
+    duration
+        ``total_duration`` of every block, in µs.
     """
 
     def __init__(self, duration: float) -> None:
@@ -47,17 +51,26 @@ class YamlSequence:
         phase: float = 0.0,
         sequence_blocks: Sequence[str] = ("block_0",),
     ) -> None:
-        """
-        Add one pulse to ``pulse_channel`` in each of ``sequence_blocks``.
+        """Add one pulse to ``pulse_channel`` in each of ``sequence_blocks``.
+
         Pulses are numbered ``pulse1``, ``pulse2``, ... per block and channel.
 
-        :param pulse_channel: Channel name (a key of the synchroniser's ``channel_mapping``).
-        :param start: Start time in µs.
-        :param duration: Length in µs.
-        :param amplitude: Analog amplitude (1 for digital channels).
-        :param frequency: Modulation frequency in Hz (0: rectangular pulse).
-        :param phase: Modulation phase in rad.
-        :param sequence_blocks: Blocks to add the pulse to.
+        Parameters
+        ----------
+        pulse_channel : str
+            Channel name (a key of the synchroniser's ``channel_mapping``).
+        start : float
+            Start time in µs.
+        duration : float
+            Length in µs.
+        amplitude : float
+            Analog amplitude (1 for digital channels).
+        frequency : float
+            Modulation frequency in Hz (0: rectangular pulse).
+        phase : float
+            Modulation phase in rad.
+        sequence_blocks : Sequence[str]
+            Blocks to add the pulse to.
         """
         for sequence_block in sequence_blocks:
             if sequence_block not in self.pulse_sequence:
@@ -79,23 +92,32 @@ class YamlSequence:
             self.counter[sequence_block][pulse_channel] += 1
 
     def write(self, sequence_number: int | None = None) -> None:
-        """
-        Write ``sequence_<sequence_number>.yaml`` (default 0) to the sequence
-        directory of the active workspace.
-        """
-        sequence_number_string = "0" if sequence_number is None else str(sequence_number)
+        """Write ``sequence_<sequence_number>.yaml`` (default 0) to the sequence directory of the active workspace."""
+        sequence_number_string = (
+            "0" if sequence_number is None else str(sequence_number)
+        )
         file_path = set_up.get_seq_dir()
         file_name = f"sequence_{sequence_number_string}.yaml"
         self.pulse_sequence["sequencing_order"] = self.sequencing_order
         self.pulse_sequence["sequencing_repeats"] = self.sequencing_repeats
-        with open(file_path / file_name, "w", encoding="utf-8") as file:
-            yaml.dump(self.pulse_sequence, file)
+        output_path = file_path / file_name
+        try:
+            with open(output_path, "w", encoding="utf-8") as file:
+                yaml.dump(self.pulse_sequence, file)
+        except Exception:
+            logger.exception("Failed to write pulse sequence to %s", output_path)
+            raise
+        logger.info(
+            "Wrote pulse sequence to %s (duration %s us, %d block(s), %d sequencing step(s))",
+            output_path,
+            self.pulse_sequence["total_duration"],
+            len(self.counter),
+            len(self.sequencing_order),
+        )
 
 
 class ComplexSequence:
-    """Class that takes instance of
-    YamlSequence and adds complex pulse sequences
-    to requested channel in a macro like manner.
+    """Class that takes instance of YamlSequence and adds complex pulse sequences to requested channel in a macro like manner.
 
     Call order: :meth:`gen_phases`, then :meth:`write_sequence`.
 
@@ -104,17 +126,30 @@ class ComplexSequence:
     ``ts_end`` for the first / last pi pulse), so pi pulses are ``2 * tau``
     apart.
 
-    :param sequence_instance: Sequence the pulses are added to.
-    :param channel: Channel name.
-    :param tau: Base interpulse delay in µs.
-    :param pi_half_pulse_dur: pi/2 pulse length in µs (first and last pulse).
-    :param pi_pulse_dur: pi pulse length in µs.
-    :param amplitude: Amplitude of all pulses.
-    :param mixing_freq: Modulation frequency in Hz.
-    :param blocks: Blocks the pulses are added to.
-    :param global_phase: Added to every pulse phase (rad).
-    :param ts_start: ``taushift`` of the first pi pulse.
-    :param ts_end: ``taushift`` of the final pi/2 pulse.
+    Parameters
+    ----------
+    sequence_instance
+        Sequence the pulses are added to.
+    channel
+        Channel name.
+    tau
+        Base interpulse delay in µs.
+    pi_half_pulse_dur
+        pi/2 pulse length in µs (first and last pulse).
+    pi_pulse_dur
+        pi pulse length in µs.
+    amplitude
+        Amplitude of all pulses.
+    mixing_freq
+        Modulation frequency in Hz.
+    blocks
+        Blocks the pulses are added to.
+    global_phase
+        Added to every pulse phase (rad).
+    ts_start
+        ``taushift`` of the first pi pulse.
+    ts_end
+        ``taushift`` of the final pi/2 pulse.
     """
 
     def __init__(
@@ -130,7 +165,7 @@ class ComplexSequence:
         blocks: Sequence[str] = ("block_0",),
         global_phase: float = 0,
         ts_start: float = 1,
-        ts_end: float = 1
+        ts_end: float = 1,
     ) -> None:
         self.sequence = sequence_instance
         self.channel: str = channel
@@ -167,12 +202,9 @@ class ComplexSequence:
         )
 
     def gen_phases(
-        self,
-        seq_type: str = "XY8",
-        n: int = 8,
-        readout_phase: float = np.pi / 2,
+        self, seq_type: str = "XY8", n: int = 8, readout_phase: float = np.pi / 2
     ) -> None:
-        """Generates a list of phases for a given sequence type.
+        """Generate the list of phases for a given sequence type.
 
         Supported sequence types ``<family><N>``, N = pi-pulses per block:
 
@@ -181,27 +213,34 @@ class ComplexSequence:
           "Arbitrarily accurate pulse sequences for robust dynamical
           decoupling" (supplemental material).
 
-        Args:
-            seq_type (str, optional): Sequence type, see above. Defaults to 'XY8'.
-            n (int, optional): Number of repetitions of each single block of
+        Parameters
+        ----------
+        seq_type : str, optional
+            Sequence type, see above. Defaults to 'XY8'.
+        n : int, optional
+            Number of repetitions of each single block of
             chosen sequence type. Defaults to 8.
-            readout_phase (float, optional): Phase of readout pulse.
+        readout_phase : float, optional
+            Phase of readout pulse.
             Defaults to np.pi/2 (sine magnetometry).
             Set to 0 for cosine magnetometry.
-        Returns:
+
+        Returns
+        -------
             Nothing. "phases" attribute is set: ``0``, the block phases
             repeated ``n`` times, then ``readout_phase``.
-        Raises:
+
+        Raises
+        ------
             ValueError: for an unknown family or an invalid N.
         """
-
         match = re.fullmatch(r"([A-Za-z]+)(\d+)", seq_type)
         if not match:
             raise ValueError(f"Invalid sequence type: {seq_type}")
 
         seq_name, N = match.groups()
-        seq_name = seq_name.upper() # convert to uppercase letters
-        N = int(N) # convert N to integer
+        seq_name = seq_name.upper()  # convert to uppercase letters
+        N = int(N)  # convert N to integer
 
         initial_phase = [0.0]
         final_phase = [readout_phase]
@@ -219,8 +258,9 @@ class ComplexSequence:
             if len(phase_block) != N:
                 raise ValueError(f"Invalid XY lenght: {N}. N must be 4, 8, 16, 32, ...")
 
-
-        elif seq_name == "UD": # From: Supplemental material to Arbitrarily accurate pulse sequences for robust dynamical decoupling
+        elif (
+            seq_name == "UD"
+        ):  # From: Supplemental material to Arbitrarily accurate pulse sequences for robust dynamical decoupling
 
             phase_block = []
 
@@ -228,9 +268,11 @@ class ComplexSequence:
             if N % 4 == 0:
                 phi_ud = np.pi / (N / 4)
             elif N % 4 == 2 and N != 2:
-                phi_ud = (np.pi * (N - 2) / 2) / (((N - 2) / 2 ) + 1)
+                phi_ud = (np.pi * (N - 2) / 2) / (((N - 2) / 2) + 1)
             else:
-                raise ValueError("Invalid ud length. The value has to be even and four or higher.")
+                raise ValueError(
+                    "Invalid ud length. The value has to be even and four or higher."
+                )
 
             # Generate quadratic phases
             if phi_ud is not None:
@@ -245,46 +287,56 @@ class ComplexSequence:
 
         self.phases = initial_phase + list(phase_block) * n + final_phase
 
-
     def write_sequence(self, start: float = 0) -> None:
-        """Iterates over phases attibute and appends
-        pulses to sequece instance.
-        """
+        """Append one pulse per entry of ``phases`` to the sequence instance."""
         self.append_pulse(
-            self.channel,
-            start,
-            self.pi_half_pulse_dur,
-            self.phases[0],
-            taushift=0,
+            self.channel, start, self.pi_half_pulse_dur, self.phases[0], taushift=0
         )
         for i, phase in enumerate(self.phases[1:-1]):
             if i == 0:
                 self.append_pulse(
-                    self.channel, start, self.pi_pulse_dur, phase, taushift=self.ts_start
+                    self.channel,
+                    start,
+                    self.pi_pulse_dur,
+                    phase,
+                    taushift=self.ts_start,
                 )
             else:
                 self.append_pulse(self.channel, start, self.pi_pulse_dur, phase)
         self.append_pulse(
-            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=self.ts_end, hard_delay = self.pi_half_pulse_dur
+            self.channel,
+            start,
+            self.pi_half_pulse_dur,
+            self.phases[-1],
+            taushift=self.ts_end,
+            hard_delay=self.pi_half_pulse_dur,
         )
 
 
 class ArbitrarySequenceWriter:
-    """
-    Write dynamical decoupling sequences defined by delay, duration and phase
-    lists (``XY8``, ``DROID60``, ``LG4``, ``CPMG``).
+    """Write dynamical decoupling sequences defined by delay, duration and phase lists (``XY8``, ``DROID60``, ``LG4``, ``CPMG``).
 
     Call order: :meth:`prepare_sequence` (sets ``params``, returns the
     sequence length in µs), then :meth:`write_sequence`.
 
-    :param channel: Channel name.
-    :param N: Number of repetitions of the sequence block.
-    :param pi: pi pulse length in µs.
-    :param pi_half: pi/2 pulse length in µs.
-    :param tau: Interpulse delay in µs.
-    :param res_mix_freq: Modulation frequency in Hz.
-    :param blocks: Blocks the pulses are added to.
-    :param nLG4_per_tau: LG4 only: number of LG4 cycles per ``tau``.
+    Parameters
+    ----------
+    channel
+        Channel name.
+    N
+        Number of repetitions of the sequence block.
+    pi
+        pi pulse length in µs.
+    pi_half
+        pi/2 pulse length in µs.
+    tau
+        Interpulse delay in µs.
+    res_mix_freq
+        Modulation frequency in Hz.
+    blocks
+        Blocks the pulses are added to.
+    nLG4_per_tau
+        LG4 only: number of LG4 cycles per ``tau``.
     """
 
     def __init__(
@@ -329,21 +381,33 @@ class ArbitrarySequenceWriter:
         )
 
     def write_sequence(self, sequence_instance: YamlSequence, start: float) -> float:
-        """
-        Add the pulses prepared by :meth:`prepare_sequence` ``N`` times.
+        """Add the pulses prepared by :meth:`prepare_sequence` ``N`` times.
 
-        :param sequence_instance: Sequence the pulses are added to.
-        :param start: Start time in µs.
-        :return: End time in µs (after the last delay).
+        Parameters
+        ----------
+        sequence_instance : YamlSequence
+            Sequence the pulses are added to.
+        start : float
+            Start time in µs.
+
+        Returns
+        -------
+        float
+            End time in µs (after the last delay).
         """
         running_start: float = start
         num_pulses = len(self.params["phases"])
 
-        assert (
+        if not (
             num_pulses == len(self.params["durations"])
             and num_pulses == len(self.params["delays"]) - 1
             and num_pulses == len(self.params["mixing_freqs"])
-        ), "Uncompatible list lengths."
+            and num_pulses == len(self.params["amplitudes"])
+        ):
+            raise ValueError(
+                "Pulse phases, durations, mixing frequencies, and amplitudes must "
+                "have equal lengths; delays require one additional entry"
+            )
 
         if self.seq_type in ("DROID60", "LG4"):
             running_start += self.pi
@@ -366,9 +430,7 @@ class ArbitrarySequenceWriter:
 
         return running_start
 
-    def prepare_sequence(
-        self, seq_type: str, lock_scaling: float = 1.0
-    ) -> float:
+    def prepare_sequence(self, seq_type: str, lock_scaling: float = 1.0) -> float:
         self.seq_type = seq_type
         supported_sequence_types = ["XY8", "DROID60", "LG4", "CPMG"]
         if seq_type not in supported_sequence_types:
@@ -481,12 +543,20 @@ class ArbitrarySequenceWriter:
             return float(sum(self.params["delays"]) * self.N + self.pi + self.pi_half)
 
         elif seq_type == "LG4":
+            if self.nLG4 <= 0 or self.tau <= self.pi_half:
+                raise ValueError(
+                    "LG4 requires positive nLG4_per_tau and tau greater than the "
+                    "half-pulse duration"
+                )
             alpha = 55 * np.pi / 180
             t_cd = (self.tau - self.pi_half) / (4 * self.nLG4)
             rabi_cd = np.sqrt(2) / (np.sqrt(3) * t_cd)
             det_cd = round(rabi_cd / np.sqrt(2))
             amplitude_cd = float(2 * rabi_cd * self.pi) * lock_scaling
-            assert amplitude_cd <= 1, "CD amplitude exceeding 1"
+            if not np.isfinite(amplitude_cd) or not 0 <= amplitude_cd <= 1:
+                raise ValueError(
+                    f"CD amplitude must lie between 0 and 1; got {amplitude_cd}"
+                )
 
             LG4_freqs = [
                 self.res_mix_freq - det_cd,

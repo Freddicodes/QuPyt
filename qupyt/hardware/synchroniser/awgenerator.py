@@ -1,63 +1,72 @@
 import logging
 import pickle
+from collections.abc import Sequence
 from pathlib import Path
 from time import time
-from collections.abc import Sequence
 from typing import Any, cast
 
 import numpy as np
 import yaml
-from pyvisa.errors import VisaIOError
 from tqdm import tqdm
 
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt.pulse_sequences.sequence_designer import (
     PulseSequenceYaml,
     parse_awg_flag,
+    validate_sequence_instructions,
 )
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.errors import cleanup_after_error, cleanup_on_exit
 
 from ._awg_common import (
+    DEFAULT_MAX_SEQUENCE_STEPS,
+    DEFAULT_MAX_STEP_REPEAT,
     AWGSequenceStep,
-    RepeatedChildValidationMixin,
-    _validate_awg_limit,
+    build_logical_awg_steps,
+    get_awg_sequence_options,
+    infer_child_repetitions,
+    validate_awg_limit,
+    validate_awg_metadata_lengths,
+    validate_awg_repeat_count,
+    validate_repeated_child_region,
 )
 from .base import Synchroniser
 
 logger = logging.getLogger(__name__)
 
-class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchroniser_types=("TekAWG",)):
-    """
-    Synchroniser implementation for Tektronix AWGs.
+
+class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
+    """Synchroniser implementation for Tektronix AWGs.
 
     Flat mode preserves the existing Tek AWG behavior. repeated_child mode uses
     Tek AWG70000-series sequence-asset SCPI and was tested on AWG70001B.
 
-    :param configuration: Configuration keys:
-
+    Parameters
+    ----------
+    configuration : dict | None
+        Configuration keys:
         - ``address`` (str, required): VISA address, e.g.
-          ``"TCPIP::<ip>::INSTR"``. The connection is opened in ``__init__``.
+        ``"TCPIP::<ip>::INSTR"``. The connection is opened in ``__init__``.
         - ``sampling_rate`` (float): samples per second, default ``5e9``.
         - ``channels`` (list[int]): AWG source channels to use, default
-          ``[1, 2]`` (reduced to the outputs the instrument has on
-          :meth:`open`).
+        ``[1, 2]`` (reduced to the outputs the instrument has on
+        :meth:`open`).
         - ``device_type`` (str): name used in log messages, default ``"TekAWG"``.
         - ``awg_max_sequence_steps`` (int, default 16384) and
-          ``awg_max_step_repeat`` (int, default 1048576): sequencer limits.
-    :type configuration: dict | None
-    :param channel_mapping: Channel name → either a row of the waveform
+        ``awg_max_step_repeat`` (int, default 1048576): sequencer limits.
+    channel_mapping : dict[str, int | str]
+        Channel name → either a row of the waveform
         (int: ``5 * i`` analog, ``5 * i + 1`` to ``5 * i + 4`` markers of
         source ``i``, see :meth:`PulseSequence.add_pulse
         <qupyt.pulse_sequences.sequence_designer.PulseSequence.add_pulse>`)
         or a sequence flag selector (str: ``"A"``-``"D"``, optionally with
         the source, e.g. ``"A2"``).
-    :type channel_mapping: dict[str, int | str]
     """
 
-   
-
     def __init__(
-        self, configuration: dict[str, Any] | None, channel_mapping: dict[str, int | str]
+        self,
+        configuration: dict[str, Any] | None,
+        channel_mapping: dict[str, int | str],
     ) -> None:
         self.device_type: str = "TekAWG"
         self.samprate: float = 5e9
@@ -74,22 +83,28 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self.dac_resolution: int = 12
         self.channels: list[int] = [1, 2]
         self.marker_channels: list[int] = [1, 2, 3, 4]
-        self.awg_max_sequence_steps: int = 16_384
-        self.awg_max_step_repeat: int = 1_048_576
+        self.awg_max_sequence_steps: int = DEFAULT_MAX_SEQUENCE_STEPS
+        self.awg_max_step_repeat: int = DEFAULT_MAX_STEP_REPEAT
 
         Synchroniser.__init__(self, configuration, channel_mapping)
         self.attribute_map["device_type"] = self._set_device_type
         self.attribute_map["sampling_rate"] = self._set_sampling_rate_attribute
         self.attribute_map["channels"] = self._set_channels_attribute
-        self.attribute_map["awg_max_sequence_steps"] = (
-            self._set_awg_max_sequence_steps
-        )
+        self.attribute_map["awg_max_sequence_steps"] = self._set_awg_max_sequence_steps
         self.attribute_map["awg_max_step_repeat"] = self._set_awg_max_step_repeat
         if configuration is not None:
             self._update_from_configuration(configuration)
         VisaObject.__init__(self, self.address, self.device_type)
-        self.instance.timeout = 20000
-        self._limit_channels_to_available_outputs()
+        try:
+            self.instance.timeout = 20000
+            self._limit_channels_to_available_outputs()
+        except BaseException:
+            logger.exception("AWG initialization failed at %s", self.address)
+            # Close the connection opened above before re-raising.
+            cleanup_after_error(
+                lambda: VisaObject.close(self), "AWG initialization cleanup"
+            )
+            raise
 
     def _extract_flags(self, channel_mapping: dict[str, int | str]) -> list[str]:
         selectors = []
@@ -111,21 +126,20 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self._configure()
 
     def close(self) -> None:
-        """
-        Does nothing: the VISA connection to the AWG is not closed here
-        (unchanged from the original implementation).
+        """Do nothing (the VISA connection is kept open).
+
+        The VISA connection to the AWG is not closed here (unchanged from the
+        original implementation).
         """
 
     def run(self) -> None:
         self.instance.write("awgcontrol:run:immediate")
-        logger.info("Turned on AWG output to RUN immediate".ljust(
-            65, ".") + "[done]")
+        logger.info("Turned on AWG output to RUN immediate".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def stop(self) -> None:
         self.instance.write("awgcontrol:stop:immediate")
-        logger.info("AWG output stopped".ljust(
-            65, ".") + "[done]")
+        logger.info("AWG output stopped".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def trigger(self) -> None:
@@ -140,7 +154,11 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self._clear_awg()
         self.sequence_options = self._load_awg_sequence_options(ps_yaml_file)
         sequence_translator = PulseSequenceYaml(
-            self.channel_mapping, self.channels, samprate=self.samprate, yaml_file = ps_yaml_file)
+            self.channel_mapping,
+            self.channels,
+            samprate=self.samprate,
+            yaml_file=ps_yaml_file,
+        )
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / "sequence.npz")
         self._get_logical_awg_steps()  # Validate cached flag metadata before upload.
@@ -149,8 +167,7 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self._sequence("autoseq", nongatereps=1)
         self._raise_on_awg_errors("sequencer construction")
         logger.info(
-            "Loaded and sequenced current pulse sequence".ljust(
-                65, ".") + "[done]"
+            "Loaded and sequenced current pulse sequence".ljust(65, ".") + "[done]"
         )
         self.opc_wait()
 
@@ -161,19 +178,18 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
             self._set_analog_amplitude(channel, self.analog_amplitude)
             self._set_output_on(channel)
             for marker in self.marker_channels:
-                self._set_marker_amplitude(
-                    channel, marker, self.marker_amplitude)
+                self._set_marker_amplitude(channel, marker, self.marker_amplitude)
         logger.info("Configuring AWG".ljust(65, ".") + "[done]")
 
     def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
         self.instance.write('wlist:waveform:delete "' + wavename + '"')
         self.instance.write(
-            'wlist:waveform:new "' + wavename +
-            '",' + str(waveform.shape[1]) + ",real"
+            'wlist:waveform:new "' + wavename + '",' + str(waveform.shape[1]) + ",real"
         )
         self.instance.write_binary_values(
             # pyvisa types this as Sequence; numpy arrays work and are faster.
-            'wlist:waveform:data "' + wavename + '",', cast(Sequence[Any], waveform[0, :])
+            'wlist:waveform:data "' + wavename + '",',
+            cast(Sequence[Any], waveform[0, :]),
         )
         self.instance.write_binary_values(
             'wlist:waveform:marker:data "' + wavename + '",',
@@ -208,7 +224,7 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
                 f"Expanded AWG sequence has {len(logical_steps)} steps, exceeding "
                 f"the configured AWG limit of {self.awg_max_sequence_steps}. Enable "
                 "awg_sequence_mode: repeated_child or reduce the sequence."
-        )
+            )
         logger.info("Tek AWG sequence mode: flat; logical_steps=%s", len(logical_steps))
         # AWG70K sequence assets have one or more tracks. Each active AWG output
         # is assigned one track of the same sequence asset via SOURCE:CASS.
@@ -218,9 +234,7 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self.instance.write('slist:sequence:event:jtiming "sub", immediate')
         for i, step in enumerate(logical_steps, start=1):
             for track, channel in enumerate(self.channels, start=1):
-                self._configure_waveform_step(
-                    "sub", i, step, channel, track
-                )
+                self._configure_waveform_step("sub", i, step, channel, track)
 
         self.instance.write(f'slist:sequence:delete "{seqname}"')
         self.instance.write(f'slist:sequence:new "{seqname}",2,{tracks}')
@@ -237,16 +251,12 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
             )
 
         # for actual seq
-        self.instance.write(
-            f'slist:sequence:step2:rcount "{seqname}", {nongatereps}'
-        )
+        self.instance.write(f'slist:sequence:step2:rcount "{seqname}", {nongatereps}')
         for track in range(1, tracks + 1):
             self.instance.write(f'SLIS:SEQ:STEP2:TASS{track}:SEQ "{seqname}","sub"')
 
         for track, channel in enumerate(self.channels, start=1):
-            self.instance.write(
-                f'SOURCE{channel}:CASS:SEQUENCE "{seqname}",{track}'
-            )
+            self.instance.write(f'SOURCE{channel}:CASS:SEQUENCE "{seqname}",{track}')
         self.opc_wait()
         logger.info("Setting up sequencer".ljust(65, ".") + "[done]")
 
@@ -291,20 +301,14 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         for step_index, step in enumerate(child, start=1):
             for track, channel in enumerate(self.channels, start=1):
                 self._configure_waveform_step(
-                    child_sequence,
-                    step_index,
-                    step,
-                    channel,
-                    track,
+                    child_sequence, step_index, step, channel, track
                 )
 
         self.instance.write(f'slist:sequence:delete "{top_sequence}"')
         self.instance.write(
             f'slist:sequence:new "{top_sequence}",{top_level_steps},{tracks}'
         )
-        self.instance.write(
-            f'slist:sequence:event:jtiming "{top_sequence}", immediate'
-        )
+        self.instance.write(f'slist:sequence:event:jtiming "{top_sequence}", immediate')
         self.instance.write(f'slist:sequence:step1:goto "{top_sequence}", first')
         self.instance.write(f'slist:sequence:step1:ejinput "{top_sequence}", ATR')
         self.instance.write(f'slist:sequence:step1:ejump "{top_sequence}", 2')
@@ -364,12 +368,14 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         # Resolve physical channels to tracks through the configured ordering.
         # Combine overlapping legacy/qualified selectors before writing each flag.
         targeted_flags = {
-            flag for selector in self.flag_channels
+            flag
+            for selector in self.flag_channels
             for flag, source in [parse_awg_flag(selector, self.channels)]
             if source is None or source == channel
         }
         present_flags = {
-            flag for selector in step.flags
+            flag
+            for selector in step.flags
             for flag, source in [parse_awg_flag(selector, self.channels)]
             if source is None or source == channel
         }
@@ -382,42 +388,58 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
     def _get_awg_sequence_mode(self) -> str:
         return str(self.sequence_options.get("awg_sequence_mode", "flat"))
 
+    # Thin wrappers around the shared functions with this synchroniser's limits.
+    def _validate_repeated_child_region(
+        self, steps: list[AWGSequenceStep]
+    ) -> tuple[
+        list[AWGSequenceStep], list[AWGSequenceStep], int, list[AWGSequenceStep]
+    ]:
+        return validate_repeated_child_region(
+            steps,
+            self.sequence_options.get("awg_repeated_child", {}),
+            max_sequence_steps=self.awg_max_sequence_steps,
+            max_step_repeat=self.awg_max_step_repeat,
+            device_type=self.device_type,
+        )
+
+    def _validate_awg_repeat_count(self, repeat: int, context: str) -> None:
+        validate_awg_repeat_count(
+            repeat, self.awg_max_step_repeat, context, self.device_type
+        )
+
+    def _infer_child_repetitions(
+        self,
+        steps: list[AWGSequenceStep],
+        prefix_steps: int,
+        child: list[AWGSequenceStep],
+    ) -> int:
+        return infer_child_repetitions(steps, prefix_steps, child)
+
     def _get_logical_awg_steps(self) -> list[AWGSequenceStep]:
-        if len(self.wavenames) != len(self.seqrepeats):
-            raise ValueError(
-                "Tek AWG sequence metadata mismatch: "
-                f"{len(self.wavenames)} waveform names but "
-                f"{len(self.seqrepeats)} repeat counts."
-            )
+        validate_awg_metadata_lengths(self.wavenames, self.seqrepeats, "Tek AWG")
         self._validate_flag_channels()
         for selectors in self.flag_values.values():
             for selector in selectors:
                 parse_awg_flag(selector, self.channels)
-        steps: list[AWGSequenceStep] = []
-        for wavename, repeat in zip(self.wavenames, self.seqrepeats, strict=True):
-            repeat = int(repeat)
-            self._validate_awg_repeat_count(repeat, f"step {len(steps) + 1}")
-            steps.append(
-                AWGSequenceStep(
-                    waveform=str(wavename),
-                    repeat=repeat,
-                    flags=tuple(sorted(self.flag_values.get(wavename, []))),
-                )
-            )
-        return steps
+        return build_logical_awg_steps(
+            self.wavenames,
+            self.seqrepeats,
+            AWGSequenceStep,
+            max_step_repeat=self.awg_max_step_repeat,
+            device_type="Tek AWG",
+            flag_values=self.flag_values,
+        )
 
     def _load_awg_sequence_options(self, ps_yaml_file: Path) -> dict[str, Any]:
         with open(ps_yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
-        return {
-            key: sequence_instructions[key]
-            for key in ("awg_sequence_mode", "awg_repeated_child")
-            if key in sequence_instructions
-        }
+        validate_sequence_instructions(sequence_instructions)
+        return get_awg_sequence_options(sequence_instructions)
 
     def _read_awg_errors(self) -> list[str]:
         errors = []
-        while True:
+        # Bounded: an instrument that never reports "0,No error" must not hang QuPyt.
+        for _ in range(100):
             response = str(self.instance.query("SYSTEM:ERROR?")).strip()
             code_text, _, message = response.partition(",")
             try:
@@ -428,24 +450,26 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
             if code == 0:
                 break
             errors.append(f"{code},{message}".rstrip(","))
+        else:
+            errors.append("AWG error queue did not drain after 100 reads")
         return errors
 
     def _raise_on_awg_errors(self, context: str) -> None:
         errors = self._read_awg_errors()
         if errors:
             raise RuntimeError(
-                f"Tektronix AWG reported errors during {context}: "
-                + "; ".join(errors)
+                f"Tektronix AWG reported errors during {context}: " + "; ".join(errors)
             )
 
     def _load_sequence_block(self, seqname: Path) -> None:
         block = np.load(seqname)
-        self.waveform_block = block["arr_0"]
-        self.seqrepeats = list(block["arr_1"])
-        self.wavenames = list(block["arr_2"])
-        self.flag_values = pickle.loads(block["arr_5"])
-        logger.info("loaded wave sequence from file".ljust(
-            65, ".") + f"{seqname}")
+        # Close the .npz file handle even if an entry is missing.
+        with cleanup_on_exit(block.close, "numeric sequence file close"):
+            self.waveform_block = block["arr_0"]
+            self.seqrepeats = list(block["arr_1"])
+            self.wavenames = list(block["arr_2"])
+            self.flag_values = pickle.loads(block["arr_5"])
+        logger.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
 
     def _clear_awg(self) -> None:
         self.instance.write("slist:sequence:delete all")
@@ -465,8 +489,7 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
             for channel_index, channel in enumerate(self.channels):
                 self._upload_waveform(
                     f"{wavename}_{channel}",
-                    self.waveform_block[i, channel_index *
-                                        2: (channel_index * 2) + 2],
+                    self.waveform_block[i, channel_index * 2 : (channel_index * 2) + 2],
                 )
                 self.opc_wait()
         logger.info(
@@ -478,8 +501,7 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
 
     def _set_output_on(self, channel: int) -> None:
         self.instance.write(f"outp{channel} on")
-        logger.info(f"Set channel{channel} output to on".ljust(
-            65, ".") + "[done]")
+        logger.info(f"Set channel{channel} output to on".ljust(65, ".") + "[done]")
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
         self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
@@ -526,25 +548,24 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         self.channels = channels
 
     def _set_awg_max_sequence_steps(self, max_sequence_steps: int) -> None:
-        self.awg_max_sequence_steps = _validate_awg_limit(
-            max_sequence_steps,
-            "awg_max_sequence_steps",
-            "Tek AWG",
+        self.awg_max_sequence_steps = validate_awg_limit(
+            max_sequence_steps, "awg_max_sequence_steps", "Tek AWG"
         )
 
     def _set_awg_max_step_repeat(self, max_step_repeat: int) -> None:
-        self.awg_max_step_repeat = _validate_awg_limit(
-            max_step_repeat,
-            "awg_max_step_repeat",
-            "Tek AWG",
+        self.awg_max_step_repeat = validate_awg_limit(
+            max_step_repeat, "awg_max_step_repeat", "Tek AWG"
         )
 
     def _limit_channels_to_available_outputs(self) -> None:
         try:
             identity = self._query_awg_identity()
-        except VisaIOError as e:
-            logger.warning("Could not query AWG identity (%s), keeping configured channels %s", e.abbreviation, self.channels)
-            return
+        except Exception:
+            logger.warning(
+                "Could not query AWG identity for output channel detection",
+                exc_info=True,
+            )
+            raise
         available_channels = self._detect_awg70000_available_channels(identity)
         if available_channels is None:
             return
@@ -574,7 +595,6 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         For unknown models, return None and leave the user-configured channels
         unchanged instead of guessing hardware capabilities.
         """
-
         if "AWG70001" in identity:
             return [1]
         if "AWG70002" in identity:
@@ -587,8 +607,12 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
     def _raise_if_repeated_child_is_unverified_model(self) -> None:
         try:
             identity = self._query_awg_identity()
-        except VisaIOError:
-            return
+        except Exception:
+            logger.warning(
+                "Could not query AWG identity for repeated-child model verification",
+                exc_info=True,
+            )
+            raise
         if "AWG5202" in identity:
             message = (
                 "awg_sequence_mode: repeated_child is not enabled for detected "
@@ -602,19 +626,22 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
             raise ValueError(message)
 
     def plot_waveform(self, wavename: str) -> None:
-        """
-        Convenience function to query and plot the values that were previously
-        uploaded to the AWG. This can be very usefull to verify, that
-        the upload worked as expected.
+        """Query and plot the values that were previously uploaded to the AWG.
 
-        :param wavename: Name of the uploaded waveform, including the channel
-         suffix it was uploaded with (``<block>_<channel>``, e.g. ``"block_0_1"``).
-        :type wavename: str
+        This can be very usefull to verify, that the upload worked as expected.
+
+        Parameters
+        ----------
+        wavename : str
+            Name of the uploaded waveform, including the channel
+            suffix it was uploaded with (``<block>_<channel>``, e.g. ``"block_0_1"``).
         """
         try:
             import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
         except ImportError as e:
-            raise ImportError("Plotting needs 'matplotlib': pip install qupyt[plot]") from e
+            raise ImportError(
+                "Plotting needs 'matplotlib': pip install qupyt[plot]"
+            ) from e
 
         marker = self.instance.query_binary_values(
             'wlist:waveform:marker:data? "' + wavename + '"', datatype="B"
@@ -625,7 +652,9 @@ class AWGenerator(VisaObject, RepeatedChildValidationMixin, Synchroniser, synchr
         # Markers are bits 7..4 of each marker byte; markers[0] is bit 7.
         marker_bytes = np.asarray(marker, dtype=np.uint8)
         markers = np.array([(marker_bytes >> bit) & 1 for bit in (7, 6, 5, 4)])
-        logger.debug("marker shape %s, analog shape %s", np.shape(markers), np.shape(analog))
+        logger.debug(
+            "marker shape %s, analog shape %s", np.shape(markers), np.shape(analog)
+        )
 
         plt.plot(np.asarray(analog) * 0.5 + 4)
         plt.plot(markers[0, :] * 0.5 + 3)

@@ -1,8 +1,9 @@
+"""Tests for Synchroniser registry.
+
+the names measurement YAML files use, how create() passes its arguments, and
+driver import errors. Registration mechanics are tested in test_registry.py.
 """
-Synchroniser registry: the names measurement YAML files use, how create()
-passes its arguments, and driver import errors. Registration mechanics are
-tested in test_registry.py.
-"""
+
 import sys
 
 import pytest
@@ -16,42 +17,52 @@ EXPECTED_SYNCHRONISERS = ["MockSynchroniser", "PulseBlaster", "SwabInstPS", "Tek
 
 # --- registered synchronisers -------------------------------------------------
 
-def test_all_synchronisers_available():
+
+def test_all_synchronisers_available() -> None:
     # Exact list (and therefore sorted): a missing or renamed registration
     # would break existing measurement YAML files.
     assert Synchroniser.available() == EXPECTED_SYNCHRONISERS
 
 
-def test_create_mock_passes_channel_mapping():
+def test_create_mock_passes_channel_mapping() -> None:
     sync = Synchroniser.create("MockSynchroniser", {}, {"LASER": 1})
     assert isinstance(sync, MockGenerator)
     assert sync.channel_mapping == {"LASER": 1}
 
 
-def test_create_mock_applies_configuration():
+def test_create_mock_applies_configuration() -> None:
     # "awg_max_step_repeat" is added to the base attribute_map by MockGenerator.
     sync = Synchroniser.create("MockSynchroniser", {"awg_max_step_repeat": 5}, {})
+    assert isinstance(sync, MockGenerator)
     assert sync.awg_max_step_repeat == 5
 
 
-def test_create_mock_rejects_unknown_configuration_key():
+def test_create_mock_rejects_unknown_configuration_key() -> None:
     with pytest.raises(KeyError, match="Unknown attribute: not_a_key"):
         Synchroniser.create("MockSynchroniser", {"not_a_key": 1}, {})
 
 
-def test_create_pulseblaster_without_spinapi_raises_import_error(monkeypatch):
+def test_create_pulseblaster_without_spinapi_raises_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "qupyt.hardware.wrappers.spinapi_adapted", None)
 
-    with pytest.raises(ImportError, match="PulseBlaster needs the SpinCore spinapi driver") as exc_info:
+    with pytest.raises(
+        ImportError, match="PulseBlaster needs the SpinCore spinapi driver"
+    ) as exc_info:
         Synchroniser.create("PulseBlaster", {}, {})
 
     assert isinstance(exc_info.value.__cause__, ImportError)
 
 
-def test_create_pstreamer_without_pulsestreamer_raises_import_error(monkeypatch):
+def test_create_pstreamer_without_pulsestreamer_raises_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "pulsestreamer", None)
 
-    with pytest.raises(ImportError, match="PStreamer needs package 'pulsestreamer'") as exc_info:
+    with pytest.raises(
+        ImportError, match="PStreamer needs package 'pulsestreamer'"
+    ) as exc_info:
         Synchroniser.create("SwabInstPS", {}, {})
 
     assert isinstance(exc_info.value.__cause__, ImportError)

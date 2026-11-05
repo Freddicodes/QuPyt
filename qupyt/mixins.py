@@ -1,51 +1,63 @@
-"""
-A shared mixin class to unify
-how parameters are updated or set from
-a configuration dictionary.
-"""
+"""Update device attributes and hardware settings from configuration dictionaries."""
+
+from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol, TypeAlias
 
 logger = logging.getLogger(__name__)
 
 
 # pylint: disable=too-few-public-methods
 class UpdateConfigurationProtocol(Protocol):
-    """
-    Protocol defining structure of the attribute_map
-    for the mixin class.
+    """Protocol for objects exposing a configuration attribute map.
+
+    Attributes
+    ----------
+    attribute_map : dict[str, Callable[[Any], None]]
+        Mapping from configuration keys to their setter functions.
     """
 
     attribute_map: dict[str, Callable[[Any], None]]
 
 
-UpdateConfigurationType = dict[str, Callable[[Any], None]]
+UpdateConfigurationType: TypeAlias = dict[str, Callable[[Any], None]]
 
 
 # pylint: disable=too-few-public-methods
 class ConfigurationMixin:
-    """
-    Mixin class to create a uniform update method
-    for attributes and hardware values from a configuration
-    dictionary.
-    """
+    """Mixin for applying configuration values through an attribute map."""
+
+    attribute_map: UpdateConfigurationType
 
     def _update_from_configuration(
         self: UpdateConfigurationProtocol, configuration: dict[str, Any]
     ) -> None:
         for attr, value in configuration.items():
             try:
-                # splitter access to map and call of method as this could hide errors
+                # Separate lookup and call: a KeyError raised inside a setter
+                # must not be reported as an unknown attribute.
                 setter = self.attribute_map[attr]
             except KeyError:
+                logger.error(
+                    "Unknown configuration attribute %s for %s",
+                    attr,
+                    type(self).__name__,
+                )
                 raise KeyError(f"Unknown attribute: {attr}") from None
-            setter(value)
+            logger.debug("Configuring %s.%s=%r", type(self).__name__, attr, value)
+            try:
+                setter(value)
+            except Exception:
+                logger.exception(
+                    "Failed to configure %s.%s=%r", type(self).__name__, attr, value
+                )
+                raise
 
 
 class PulseSequenceError(Exception):
-    "PulseStreamer sequence definition contains non-valid input (amplitude, frequency,...)"
+    """Error raised for invalid pulse-sequence values."""
 
 
 class DAQOpenError(RuntimeError):
@@ -60,7 +72,7 @@ class DAQOpenError(RuntimeError):
 
 
 class ConfigurationError(ValueError):
-    """Error type to be raised for hardware misconfigurations"""
+    """Error raised for an unsupported hardware configuration value."""
 
     def __init__(self, config_param: Any, value: Any, valids: Any) -> None:
         self.config_param = config_param

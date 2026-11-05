@@ -10,10 +10,12 @@ from .signal_sources import SignalSource
 
 logger = logging.getLogger(__name__)
 
+
 class MockSignalSource(SignalSource, device_types=("Mock",)):
-    """
-    Signal source without hardware: ``frequency``, ``amplitude`` and
-    ``phase`` are only logged (``MOCKING! -> ...``), with a 0.1 s delay each.
+    """Signal source without hardware.
+
+    ``frequency``, ``amplitude`` and ``phase`` are only logged (``MOCKING! ->
+    ...``), with a 0.1 s delay each.
     """
 
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
@@ -34,7 +36,8 @@ class MockSignalSource(SignalSource, device_types=("Mock",)):
         channel, value = freq
         sleep(0.1)
         logger.info(
-            f"MOCKING! -> set frequency channel {channel} to".ljust(65, ".") + f"{value}"
+            f"MOCKING! -> set frequency channel {channel} to".ljust(65, ".")
+            + f"{value}"
         )
 
     @validate_call
@@ -44,7 +47,8 @@ class MockSignalSource(SignalSource, device_types=("Mock",)):
         channel, value = ampl
         sleep(0.1)
         logger.info(
-            f"MOCKING! -> set amplitude channel {channel} to".ljust(65, ".") + f"{value}"
+            f"MOCKING! -> set amplitude channel {channel} to".ljust(65, ".")
+            + f"{value}"
         )
 
     @validate_call

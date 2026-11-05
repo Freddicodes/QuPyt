@@ -1,11 +1,14 @@
 import logging
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Any
 
 import numpy as np
 import yaml
 
 from qupyt.mixins import PulseSequenceError
+from qupyt.pulse_sequences.sequence_designer import validate_sequence_instructions
+from qupyt.utils.errors import cleanup_after_error
 
 from ._awg_common import _validate_synchroniser_sequence_mode
 from .base import Synchroniser
@@ -13,19 +16,26 @@ from .base import Synchroniser
 logger = logging.getLogger(__name__)
 
 
-class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
-    """
-    Swabian Instruments Pulse Streamer 8/2 (registered as ``SwabInstPS``).
-    Digital channels only; time resolution 1 ns. Only the ``flat``
-    sequence mode is supported.
+class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
+    """Swabian Instruments Pulse Streamer 8/2 (registered as ``SwabInstPS``).
 
-    :param configuration: ``address`` (IP); without it (or ``"None"``) the
+    Digital channels only; time resolution 1 ns. Only the ``flat`` sequence
+    mode is supported.
+
+    Parameters
+    ----------
+    configuration : dict | None
+        ``address`` (IP); without it (or ``"None"``) the
         first Pulse Streamer found on the network is used.
-    :type configuration: dict | None
-    :param channel_mapping: Channel name → digital output number.
-    :type channel_mapping: dict[str, int]
-    :raises ImportError: if the ``pulsestreamer`` package is missing.
-    :raises ConnectionError: if discovery finds no device.
+    channel_mapping : dict[str, int]
+        Channel name → digital output number.
+
+    Raises
+    ------
+    ImportError
+        if the ``pulsestreamer`` package is missing.
+    ConnectionError
+        if discovery finds no device.
     """
 
     def __init__(
@@ -73,11 +83,15 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
         self.address = devices[0][0]
 
     def open(self) -> None:
-        """
-        Connect to the Pulse Streamer at ``address``. Without an address the
-        device was already discovered on the network in ``__init__``.
+        """Connect to the Pulse Streamer at ``address``.
 
-        :raises ConnectionError: if the connection (or firmware check) fails.
+        Without an address the device was already discovered on the network in
+        ``__init__``.
+
+        Raises
+        ------
+        ConnectionError
+            if the connection (or firmware check) fails.
         """
         try:
             self.pulser = self._ps.PulseStreamer(self.address)
@@ -88,28 +102,31 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
                 f"Could not connect to Pulse Streamer at {self.address}: {e}"
             ) from e
         logger.info(
-            f"Pulse Streamer connected at {self.address}".ljust(65, ".")
-            + "[done]"
+            f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
         )
 
     def close(self) -> None:
-        """
-        There is no function for closing the connection of the device. We have
-        tested that running thousands of connections does not slow down the
-        execution, we assume we can call pass on the close function.
+        """There is no function for closing the connection of the device.
+
+        We have tested that running thousands of connections does not slow down
+        the execution, we assume we can call pass on the close function.
         """
 
     def stop(self) -> None:
-        """
-        Stops the playing sequence and sets all channels to the final state
-        passed to ``stream()`` in :meth:`run` (ZERO, i.e. 0 V).
+        """Stop the playing sequence.
+
+        All channels go to the final state passed to ``stream()`` in
+        :meth:`run` (ZERO, i.e. 0 V).
+
+        Raises
+        ------
+        RuntimeError
+            If the device is still streaming afterwards.
         """
         self.pulser.forceFinal()
         if self.pulser.isStreaming():
-            logger.warning(
-                "Pulse Streamer: the sequence could not be stopped".ljust(65, ".")
-                + "[failed]"
-            )
+            logger.error("Pulse Streamer is still streaming after forceFinal()")
+            raise RuntimeError("Pulse Streamer is still streaming after forceFinal()")
         else:
             logger.info(
                 "Pulse Streamer: stopped pulse sequence execution".ljust(65, ".")
@@ -117,19 +134,27 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
             )
 
     def writeDigSeq(self, channel_key: str) -> list[tuple[int, int]]:
-        """
-        Build the digital pattern of one channel of the current block
-        (``self.pulse_list``, set by :meth:`load_sequence`).
+        """Build the digital pattern of one channel of the current block (``self.pulse_list``, set by :meth:`load_sequence`).
 
         Times are converted from µs to ns (the Pulse Streamer's resolution)
         and rounded with a warning if needed.
 
-        :param channel_key: Channel name, a key of ``channel_mapping`` (e.g. ``"LASER"``).
-        :type channel_key: str
-        :return: ``(duration_ns, level)`` pairs, ``level`` 0 or 1.
-        :rtype: list[tuple[int, int]]
-        :raises KeyError: if the block has no such channel.
-        :raises PulseSequenceError: for overlapping pulses, analog settings
+        Parameters
+        ----------
+        channel_key : str
+            Channel name, a key of ``channel_mapping`` (e.g. ``"LASER"``).
+
+        Returns
+        -------
+        list[tuple[int, int]]
+            ``(duration_ns, level)`` pairs, ``level`` 0 or 1.
+
+        Raises
+        ------
+        KeyError
+            if the block has no such channel.
+        PulseSequenceError
+            for overlapping pulses, analog settings
             (frequency, amplitude, phase) or a sequence longer than ``total_duration``.
         """
         self.channel_key = channel_key
@@ -137,7 +162,9 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
         pointer_i = 0  # pointer in time
         # Check if the asked channel_key exists in the file
         if self.channel_key not in list(self.pulse_list.keys()):
-            raise KeyError(f"No channel named {self.channel_key!r} in the pulse sequence")
+            raise KeyError(
+                f"No channel named {self.channel_key!r} in the pulse sequence"
+            )
 
         for i in range(len(self.pulse_list[self.channel_key])):
             pulse = f"{self.channel_key} pulse{i + 1}"
@@ -238,9 +265,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
         return self.seq
 
     def plot_sequence(self) -> None:
-        """
-        Plot the loaded sequence. Only works while the Pulse Streamer is
-        streaming; otherwise a warning is logged.
+        """Plot the loaded sequence.
+
+        Only works while the Pulse Streamer is streaming; otherwise a warning
+        is logged.
         """
         # check if the sequence has been loaded.
         if self.pulser.isStreaming() is True:
@@ -251,19 +279,23 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
             )
 
     def load_sequence(self, ps_yaml_file: Path) -> None:
-        """
-        Build the Pulse Streamer sequence from a pulse sequence YAML file:
-        one ``Sequence`` per block (:meth:`writeDigSeq` for each channel),
-        then the blocks in ``sequencing_order`` with ``sequencing_repeats``.
-        Only the ``flat`` sequence mode is supported. Nothing is uploaded
-        here; :meth:`run` streams the sequence.
+        """Build the Pulse Streamer sequence from a pulse sequence YAML file.
 
-        :param ps_yaml_file: Path of the pulse sequence YAML file.
-        :type ps_yaml_file: Path
+        One ``Sequence`` per block (:meth:`writeDigSeq` for each channel), then
+        the blocks in ``sequencing_order`` with ``sequencing_repeats``. Only
+        the ``flat`` sequence mode is supported. Nothing is uploaded here;
+        :meth:`run` streams the sequence.
+
+        Parameters
+        ----------
+        ps_yaml_file : Path
+            Path of the pulse sequence YAML file.
         """
         self.yaml_file = ps_yaml_file
+        logger.info("Loading Pulse Streamer sequence from %s", self.yaml_file)
         with open(self.yaml_file, "r", encoding="utf-8") as file:
-            full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
+            full_pulse_list = yaml.safe_load(file)
+        validate_sequence_instructions(full_pulse_list)
         # PulseStreamer consumes the expanded pulse program directly; it
         # does not implement Tek AWG parent/child sequencer compression.
         _validate_synchroniser_sequence_mode(
@@ -277,13 +309,11 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
         if total_duration_unparsed == "ignore":
             self.total_duration = np.inf
         if total_duration_unparsed != "ignore":
-            total_duration = float(
-                total_duration_unparsed) * 1e3  # convert to ns
+            total_duration = float(total_duration_unparsed) * 1e3  # convert to ns
             if total_duration - round(total_duration) != 0:
                 logger.warning(
                     "The total duration is not a multiple of the sampling "
-                    "time and is being rounded".ljust(65, ".")
-                    + "[WARNING]"
+                    "time and is being rounded".ljust(65, ".") + "[WARNING]"
                 )
                 self.total_duration = round(total_duration)
             else:
@@ -298,8 +328,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
             self.check_types(self.pulse_list)
             for channel in self.pulse_list:
                 sequences_to_write[block].setDigital(
-                    self.channel_mapping[channel], self.writeDigSeq(
-                        channel)
+                    self.channel_mapping[channel], self.writeDigSeq(channel)
                 )
         self.sequence = self._ps.Sequence()
         for block, repetitions in zip(sequence_order, sequencing_repeats, strict=True):
@@ -313,10 +342,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
                     pulse_list[channel][pulse][par] = float(par_value)
 
     def run(self) -> None:
-        """
-        Reset the device (all outputs 0 V), upload the sequence and play it
-        once, starting immediately. Blocks until the sequence has finished.
-        The final state is ZERO (0 V). :meth:`trigger` plays it again.
+        """Reset the device (all outputs 0 V), upload the sequence and play it once, starting immediately.
+
+        Blocks until the sequence has finished. The final state is ZERO (0 V).
+        :meth:`trigger` plays it again.
         """
         n_runs = 1  # play the sequence once
 
@@ -332,22 +361,31 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS", )):
         self.pulser.setTrigger(start=start, rearm=rearm)
 
         # upload the sequence and arm the device
-        self.pulser.stream(self.sequence, n_runs, final)
-        while self.pulser.isStreaming():
-            pass
+        try:
+            self.pulser.stream(self.sequence, n_runs, final)
+            # Wait for the sequence to finish, but not forever.
+            deadline = monotonic() + self.sequence.getDuration() * 1e-9 + 10
+            while self.pulser.isStreaming():
+                if monotonic() >= deadline:
+                    raise TimeoutError(
+                        "Pulse Streamer did not finish within the sequence "
+                        "duration plus 10 seconds"
+                    )
+                sleep(0.01)
+        except Exception:
+            logger.exception("Pulse Streamer: problem setting to run")
+            cleanup_after_error(self.stop, "Pulse Streamer run cleanup")
+            raise
         # check if the sequence has been started correctly.
-        logger.info("Pulse Streamer: sent run signal".ljust(
-            65, ".") + "[done]")
+        logger.info("Pulse Streamer: sent run signal".ljust(65, ".") + "[done]")
 
     def trigger(self) -> None:
-        """
-        Play the sequence uploaded by :meth:`run` once more (``rearm`` +
-        ``startNow``), without waiting for a hardware trigger. Does not
-        block and does not reset the outputs.
+        """Play the sequence uploaded by :meth:`run` once more (``rearm`` + ``startNow``), without waiting for a hardware trigger.
+
+        Does not block and does not reset the outputs.
         """
         self.pulser.rearm()
         self.pulser.startNow()
         logger.info(
-            "Pulse Streamer: Sent signal to play sequence".ljust(
-                65, ".") + "[done]"
+            "Pulse Streamer: Sent signal to play sequence".ljust(65, ".") + "[done]"
         )

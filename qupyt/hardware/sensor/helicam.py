@@ -4,13 +4,15 @@ import logging
 import os
 import sys
 from pathlib import Path
-from time import time
+from time import monotonic, time
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from qupyt.mixins import ConfigurationError
+from qupyt.utils.decorators import log_sensor_acquisition
+from qupyt.utils.errors import cleanup_after_error, close_on_initialization_error
 
 from .base import Sensor
 
@@ -24,7 +26,10 @@ def _helic_wrapper_dir() -> Path:
     if override := os.environ.get("QUPYT_HELIC_PATH"):
         return Path(override)
     if sys.platform == "win32":
-        return Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Heliotis/heliCam/Python/wrapper"
+        return (
+            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+            / "Heliotis/heliCam/Python/wrapper"
+        )
     return Path("/usr/share/libhelic/python/wrapper")
 
 
@@ -44,39 +49,42 @@ def _import_libhelic() -> ModuleType:
 
 
 class HeliCam(Sensor, sensor_types=("HeliC3",)):
+    """`Heliotis <https://www.heliotis.com>`_ builds highly specialized lock-in cameras which are very powerful for specific applications.
+
+    This class focuses on the implementation of their heliCam C3 and its raw
+    readout mode.
+
+    Parameters
+    ----------
+    configuration : dict
+        Configuration dictionary. Keys will be used
+        to select setter methods from an attribute map dictionary to set
+        associated values.
+
+        Possible configuration values:
+          - **exposure_time** (int/float, µs): This value will get converted
+            to heliCam clock cycles. While float values are possible, and may
+            provide more fine-grained control, the number of clock cycles will
+            be rounded. Therefore, I advise to stick with integer values.
+          - **SensNavM2** (int, optional, default ``6``): Heliotis-specific
+            sensor setting that is vital to the operation of the camera;
+            see the Heliotis documentation for its meaning.
+          - **number_measurements** (int, even): HeliCam overwrites
+            the base :class:`Sensor` class's
+            set_number_measurements logic, because every frame produced
+            by the heliCam C3 contains two sub frames. We reshape this nested
+            frame structure into a flat array of frames in accordance to all
+            other cameras. However, this implied that internally, the
+            configuration for the number of frames works slightly differently.
+
+        Note that these configuration attributes extend those from the
+        :class:`Sensor` base class.
     """
-    `Heliotis <https://www.heliotis.com>`_ builds highly specialized lock-in
-    cameras which are very powerful for specific applications.
-    This class focuses on the implementation of their heliCam C3 and its
-    raw readout mode.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dictionary to set
-          associated values.
-
-          Possible configuration values:
-            - **exposure_time** (int/float, µs): This value will get converted
-              to heliCam clock cycles. While float values are possible, and may
-              provide more fine-grained control, the number of clock cycles will
-              be rounded. Therefore, I advise to stick with integer values.
-            - **SensNavM2** (int, optional, default ``6``): Heliotis-specific
-              sensor setting that is vital to the operation of the camera;
-              see the Heliotis documentation for its meaning.
-            - **number_measurements** (int, even): HeliCam overwrites
-              the base :class:`Sensor` class's
-              set_number_measurements logic, because every frame produced
-              by the heliCam C3 contains two sub frames. We reshape this nested
-              frame structure into a flat array of frames in accordance to all
-              other cameras. However, this implied that internally, the
-              configuration for the number of frames works slightly differently.
-
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
-    """
-
+    @close_on_initialization_error
     def __init__(self, configuration: dict[str, Any] | None) -> None:
 
+        self._is_open = False
         self._heli = _import_libhelic()
 
         self.settings = {
@@ -125,27 +133,42 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
         self.number_measurements = int(number_measurements)
 
     def open(self) -> None:
+        """Open the camera (system ``c3cam_sl70``), flush pending frames, write the stored settings (exposure, ``SensNavM2``, ...) to the camera's register map, allocate the data buffer and set a 10 s timeout.
+
+        Raises
+        ------
+        TimeoutError
+            If flushing pending frames takes longer than 10 s.
         """
-        Open the camera (system ``c3cam_sl70``), flush pending frames, write
-        the stored settings (exposure, ``SensNavM2``, ...) to the camera's
-        register map, allocate the data buffer and set a 10 s timeout.
-        """
-        self.he_sys.Open(0, sys="c3cam_sl70")
-        res = 1
-        while res > 0:
-            res = self.he_sys.Acquire()
-        for key, value in self.settings.items():
-            setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(
-            1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
-        self.he_sys.SetTimeout(10000)
+        if self._is_open:
+            return
+        try:
+            self.he_sys.Open(0, sys="c3cam_sl70")
+            self._is_open = True
+            # Set the timeout first so the flush below cannot block forever.
+            self.he_sys.SetTimeout(10000)
+            deadline = monotonic() + 10
+            res = 1
+            while res > 0:
+                if monotonic() >= deadline:
+                    raise TimeoutError(
+                        "HeliCam buffer flush did not finish within 10 seconds"
+                    )
+                res = self.he_sys.Acquire()
+            for key, value in self.settings.items():
+                setattr(self.he_sys.map, key, value)
+            self.he_sys.AllocCamData(
+                1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0
+            )
+        except BaseException:
+            logger.exception("HeliCam setup failed")
+            cleanup_after_error(self.close, "HeliCam setup cleanup")
+            raise
         logger.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
+    @log_sensor_acquisition
     def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
-        """
-        Reads frames from the camera and reshuffels from the
-        heliCam specific format to the structure
-        we expect from other sensors.
+        """Read frames and reorder them from the heliCam format to the common sensor layout.
 
         See :meth:`Sensor.acquire_data`.
         """
@@ -154,9 +177,8 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             synchroniser.trigger()
         res = self.he_sys.Acquire()
         if res < 0:
-            logger.warning(
-                "Your camera appears to have timed out".ljust(
-                    65, ",") + "[done]"
+            raise TimeoutError(
+                f"HeliCam acquisition failed or timed out (status={res})"
             )
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
@@ -164,7 +186,7 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
         data = img.contents.data
         h, w = self.roi_shape
         data = self._heli.LibHeLIC.Ptr2Arr(
-            data, (self.settings["SensNFrames"], h, 2), self._heli.ct.c_ushort
+            data, (self.settings["SensNFrames"], h, w, 2), self._heli.ct.c_ushort
         )
         raw_frames = np.asarray(data, dtype="int32")
         return_frames = np.zeros((2 * self.settings["SensNFrames"], h, w))
@@ -172,14 +194,18 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
         logger.info(
-            f"HeliCam C3 data acquisition took {time_2 - time_1} s".ljust(
-                65, ".")
+            f"HeliCam C3 data acquisition took {time_2 - time_1} s".ljust(65, ".")
             + "[done]"
         )
         return return_frames
 
     def close(self) -> None:
-        """Closes the camera.
-        A new camera instance may now be created."""
+        """Close the camera.
+
+        A new camera instance may now be created. Safe to call twice.
+        """
+        if not getattr(self, "_is_open", False):
+            return
         self.he_sys.Close()
+        self._is_open = False
         logger.info("HeliCam C3 closed".ljust(65, ".") + "[done]")

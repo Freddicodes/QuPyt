@@ -1,18 +1,22 @@
-"""
-main.parse_input: the worker loop around run_measurement.
+"""main.parse_input: the worker loop around run_measurement.
 
 Hardware creation, the user pulse sequence script and run_measurement are
 replaced by fakes; the fake measurement sets ``stop`` so the loop ends after
 the queued files.
 """
+
 import threading
+from pathlib import Path
 from queue import Queue
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
 import yaml
 
 import qupyt.main as qupyt_main
+from qupyt.hardware.sensor import Sensor
+from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.set_up import QuPytConfig
 
 INSTRUCTIONS = {
@@ -27,35 +31,38 @@ INSTRUCTIONS = {
 
 
 @pytest.fixture
-def config(tmp_path):
+def config(tmp_path: Path) -> Any:
     config = QuPytConfig(tmp_path / "in", tmp_path / "out")
     config.create_ws()
     return config
 
 
 @pytest.fixture
-def fakes(monkeypatch):
+def fakes(monkeypatch: pytest.MonkeyPatch) -> Any:
     fakes = Mock()
     fakes.write_user_ps.return_value = None
     fakes.run_measurement.return_value = "success"
     monkeypatch.setattr(qupyt_main, "write_user_ps", fakes.write_user_ps)
     monkeypatch.setattr(qupyt_main, "run_measurement", fakes.run_measurement)
-    monkeypatch.setattr(qupyt_main.Synchroniser, "create", fakes.create_synchroniser)
-    monkeypatch.setattr(qupyt_main.Sensor, "create", fakes.create_sensor)
+    monkeypatch.setattr(Synchroniser, "create", fakes.create_synchroniser)
+    monkeypatch.setattr(Sensor, "create", fakes.create_sensor)
     return fakes
 
 
-def instruction_file(config, name="odmr.yaml", content=None):
+def instruction_file(config: Any, name: Any = "odmr.yaml", content: Any = None) -> Any:
     path = config.waiting_room / name
     path.write_text(yaml.safe_dump(content or INSTRUCTIONS), encoding="utf-8")
     return path
 
 
-def run_worker(monkeypatch, config, fakes, *paths):
-    """
-    Run parse_input until the queue is drained. parse_input calls _set_ready
-    at start-up and again whenever the queue is empty after an item, so the
-    second call stops the loop. Returns the status seen by each measurement.
+def run_worker(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any, *paths: Any
+) -> Any:
+    """Run parse_input until the queue is drained.
+
+    parse_input calls _set_ready at start-up and again whenever the queue is
+    empty after an item, so the second call stops the loop. Returns the status
+    seen by each measurement.
     """
     queue: Queue[str] = Queue()
     for path in paths:
@@ -64,7 +71,7 @@ def run_worker(monkeypatch, config, fakes, *paths):
     ready_calls = []
     real_set_ready = qupyt_main._set_ready
 
-    def set_ready(status_file):
+    def set_ready(status_file: Any) -> None:
         real_set_ready(status_file)
         ready_calls.append(status_file)
         if len(ready_calls) >= 2:
@@ -74,8 +81,10 @@ def run_worker(monkeypatch, config, fakes, *paths):
     status_during = []
     result = fakes.run_measurement.return_value
 
-    def measure(*_args):
-        status_during.append((config.input_dir / "status.txt").read_text(encoding="utf-8"))
+    def measure(*_args: Any) -> Any:
+        status_during.append(
+            (config.input_dir / "status.txt").read_text(encoding="utf-8")
+        )
         return result
 
     fakes.run_measurement.side_effect = measure
@@ -86,11 +95,13 @@ def run_worker(monkeypatch, config, fakes, *paths):
     return status_during
 
 
-def leftover(config):
+def leftover(config: Any) -> Any:
     return sorted(p.name for p in config.waiting_room.iterdir())
 
 
-def test_success_deletes_the_file_and_sets_status(monkeypatch, config, fakes):
+def test_success_deletes_the_file_and_sets_status(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     path = instruction_file(config)
     status_during = run_worker(monkeypatch, config, fakes, path)
     assert status_during == ["busy"]
@@ -100,7 +111,9 @@ def test_success_deletes_the_file_and_sets_status(monkeypatch, config, fakes):
     fakes.write_user_ps.assert_called_once()
 
 
-def test_failed_measurement_renames_to_failed(monkeypatch, config, fakes):
+def test_failed_measurement_renames_to_failed(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     fakes.run_measurement.return_value = "failed"
     path = instruction_file(config)
     run_worker(monkeypatch, config, fakes, path)
@@ -108,7 +121,9 @@ def test_failed_measurement_renames_to_failed(monkeypatch, config, fakes):
     assert name.startswith("odmr.yaml_failed_")
 
 
-def test_exception_renames_to_failed_and_sets_ready(monkeypatch, config, fakes):
+def test_exception_renames_to_failed_and_sets_ready(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     fakes.create_sensor.side_effect = RuntimeError("no camera")
     path = instruction_file(config)
     run_worker(monkeypatch, config, fakes, path)
@@ -118,18 +133,24 @@ def test_exception_renames_to_failed_and_sets_ready(monkeypatch, config, fakes):
     fakes.run_measurement.assert_not_called()
 
 
-def test_missing_file_is_skipped(monkeypatch, config, fakes):
+def test_missing_file_is_skipped(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     run_worker(monkeypatch, config, fakes, config.waiting_room / "gone.yaml")
     fakes.run_measurement.assert_not_called()
 
 
-def test_same_file_queued_twice_runs_once(monkeypatch, config, fakes):
+def test_same_file_queued_twice_runs_once(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     path = instruction_file(config)
     run_worker(monkeypatch, config, fakes, path, path)
     assert fakes.run_measurement.call_count == 1
 
 
-def test_parameters_from_the_pulse_sequence_script_are_merged(monkeypatch, config, fakes):
+def test_parameters_from_the_pulse_sequence_script_are_merged(
+    monkeypatch: pytest.MonkeyPatch, config: Any, fakes: Any
+) -> None:
     fakes.write_user_ps.return_value = {"averages": 7}
     path = instruction_file(config)
     run_worker(monkeypatch, config, fakes, path)

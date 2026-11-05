@@ -1,5 +1,4 @@
-"""
-Location of the QuPyt workspace on the user's machine.
+"""Location of the QuPyt workspace on the user's machine.
 
 The workspace is a directory (``~/.qupyt`` by default) containing the log
 files, the generated pulse sequences and the waiting room that QuPyt
@@ -26,8 +25,7 @@ _OUTPUT_DIR_ENV_VAR = "QUPYT_OUT_DIR"
 
 
 class QuPytConfig:
-    """
-    Locations of the QuPyt workspace and its subdirectories.
+    """Locations of the QuPyt workspace and its subdirectories.
 
     The workspace (input) directory is chosen in this order:
         1. the ``in_dir`` argument (e.g. from ``--in-dir``),
@@ -42,20 +40,24 @@ class QuPytConfig:
         4. the current working directory when the config is created.
     """
 
-    def __init__(self, in_dir: Path | str | None = None, output_dir: Path | str | None = None) -> None:
-        """
-        Determine the workspace paths. Nothing is created on disk;
-        call :meth:`create_ws` for that.
+    def __init__(
+        self, in_dir: Path | str | None = None, output_dir: Path | str | None = None
+    ) -> None:
+        """Determine the workspace paths.
 
-        :param in_dir: Workspace directory. If omitted, ``QUPYT_IN_DIR``
+        Nothing is created on disk; call :meth:`create_ws` for that.
+
+        Parameters
+        ----------
+        in_dir : Path | str | None
+            Workspace directory. If omitted, ``QUPYT_IN_DIR``
             or ``~/.qupyt`` is used. ``~`` is expanded and relative paths
             are made absolute (relative to the working directory at startup).
-        :type in_dir: Path | str | None
-        :param output_dir: Output directory. If omitted, ``QUPYT_OUT_DIR``
+        output_dir : Path | str | None
+            Output directory. If omitted, ``QUPYT_OUT_DIR``
             or the current directory is used. ``~`` is expanded and relative
             paths are made absolute. A measurement YAML can still override it
             with its own ``output_dir`` key.
-        :type output_dir: Path | str | None
         """
         chosen_input_dir = in_dir or os.getenv(_INPUT_DIR_ENV_VAR) or _DEFAULT_INPUT_DIR
         self.input_dir: Path = Path(chosen_input_dir).expanduser().resolve()
@@ -69,14 +71,21 @@ class QuPytConfig:
         self.waiting_room: Path = self.input_dir / "waiting_room"
 
     def create_ws(self) -> None:
-        """
-        Create the workspace, its subdirectories and the output directory
-        if they don't exist yet.
+        """Create the workspace, its subdirectories and the output directory if they don't exist yet.
 
-        :raises OSError: if a directory cannot be created. QuPyt cannot run
+        Raises
+        ------
+        OSError
+            if a directory cannot be created. QuPyt cannot run
             without its workspace, so the error is not swallowed.
         """
-        for directory in (self.input_dir, self.log_dir, self.seq_dir, self.waiting_room, self.output_dir):
+        for directory in (
+            self.input_dir,
+            self.log_dir,
+            self.seq_dir,
+            self.waiting_room,
+            self.output_dir,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
         logger.info("Workspace ready at %s", self.input_dir)
 
@@ -85,61 +94,78 @@ _config = QuPytConfig()
 
 
 def set_config(config: QuPytConfig) -> None:
-    """
-    Make ``config`` the active workspace for all ``get_*`` functions.
+    """Make ``config`` the active workspace for all ``get_*`` functions.
 
-    :param config: The workspace configuration to activate.
-    :type config: QuPytConfig
+    Parameters
+    ----------
+    config : QuPytConfig
+        The workspace configuration to activate.
     """
     global _config
     _config = config
 
 
 def get_config() -> QuPytConfig:
-    """
-    :return: The currently active workspace configuration.
-    :rtype: QuPytConfig
+    """Return the currently active workspace configuration.
+
+    Returns
+    -------
+    QuPytConfig
+        The currently active workspace configuration.
     """
     return _config
 
 
 def get_seq_dir() -> Path:
-    """
-    :return: Directory to which pulse sequences are written and read.
-    :rtype: Path
+    """Return directory to which pulse sequences are written and read.
+
+    Returns
+    -------
+    Path
+        Directory to which pulse sequences are written and read.
     """
     return _config.seq_dir
 
 
 def get_log_dir() -> Path:
-    """
-    :return: Directory for the log files.
-    :rtype: Path
+    """Return directory for the log files.
+
+    Returns
+    -------
+    Path
+        Directory for the log files.
     """
     return _config.log_dir
 
 
 def get_waiting_room() -> Path:
-    """
-    :return: Directory watched for measurement instruction files.
-    :rtype: Path
+    """Return directory watched for measurement instruction files.
+
+    Returns
+    -------
+    Path
+        Directory watched for measurement instruction files.
     """
     return _config.waiting_room
 
 
 def get_input_dir() -> Path:
-    """
-    :return: The workspace directory itself (contains ``status.txt``).
-    :rtype: Path
+    """Return the workspace directory itself (contains ``status.txt``).
+
+    Returns
+    -------
+    Path
+        The workspace directory itself (contains ``status.txt``).
     """
     return _config.input_dir
 
 
 def get_output_dir() -> Path:
-    """
-    :return: Directory used for output of the measurement files.
-    :rtype: Path
+    """Return directory used for output of the measurement files.
+
+    Returns
+    -------
+    Path
+        Directory used for output of the measurement files.
     """
     return _config.output_dir
-
-

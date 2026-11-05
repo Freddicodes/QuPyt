@@ -1,8 +1,8 @@
-"""
-Keeps track of the devices (signal sources, power supplies, ...) in active
-use. Newly requested devices are opened and added to a dictionary of used
-devices, while no longer needed ones are closed and deleted. Edge cases
-like no requested devices are handled.
+"""Keeps track of the devices (signal sources, power supplies, ...) in active use.
+
+Newly requested devices are opened and added to a dictionary of used devices,
+while no longer needed ones are closed and deleted. Edge cases like no
+requested devices are handled.
 
 Device configuration and the output values to be set or swept are handled
 here as well (:class:`DeviceHandler` for static, :class:`DynamicDeviceHandler`
@@ -11,12 +11,14 @@ for swept devices).
 
 import copy
 import logging
+from functools import partial
 from typing import Any, cast
 
 import numpy as np
 from pydantic import validate_call
 
 from qupyt.hardware.device import Device
+from qupyt.utils.errors import cleanup_all
 
 DynamicParameterInput = (
     list[float | int]
@@ -28,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceHandler:
-    """
-    A class to handle the management of devices for measurements.
+    """A class to handle the management of devices for measurements.
 
     This class provides methods to update the list of requested devices,
     close superfluous devices, open new requested devices, and set parameters
@@ -39,28 +40,26 @@ class DeviceHandler:
     duration of one measurement.
     """
 
-    def __init__(
-        self,
-        requested_devices: dict[str, Any],
-    ) -> None:
-        """
-        Initialize the DeviceHandler with a dictionary of requested devices.
+    def __init__(self, requested_devices: dict[str, Any]) -> None:
+        """Initialize the DeviceHandler with a dictionary of requested devices.
 
-        :param requested_devices: A dictionary containing the initial requested
-                                  devices configuration.
-        :type requested_devices: dict[str, Any]
+        Parameters
+        ----------
+        requested_devices : dict[str, Any]
+            A dictionary containing the initial requested
+            devices configuration.
         """
         self.requested_devices: dict[str, Any] = copy.deepcopy(requested_devices)
         self.devices: dict[str, Any] = {}
 
     def update_devices(self, requested_devices: dict[str, Any] | None) -> None:
-        """
-        Update the device lists by closing all superfluous devices and opening
-        newly requested devices.
+        """Update the device lists by closing all superfluous devices and opening newly requested devices.
 
-        :param requested_devices: A dictionary containing the updated requested
-                                  devices configuration.
-        :type requested_devices: dict[str, Any] | None
+        Parameters
+        ----------
+        requested_devices : dict[str, Any] | None
+            A dictionary containing the updated requested
+            devices configuration.
         """
         if requested_devices is None:
             self.requested_devices = {}
@@ -70,8 +69,7 @@ class DeviceHandler:
         self.open_new_requested_devices()
 
     def close_superfluous_devices(self) -> None:
-        """
-        Close all devices not requested for the next measurement.
+        """Close all devices not requested for the next measurement.
 
         This method compares the dictionaries of requested and existing devices,
         and closes and removes devices that are not requested.
@@ -79,18 +77,25 @@ class DeviceHandler:
         requested_name_address_tuples = [
             (key, val["address"]) for key, val in self.requested_devices.items()
         ]
-        for key, value in list(self.devices.items()):
-            if (key, value["address"]) not in requested_name_address_tuples:
-                self.devices[key]["device"].close()
-                rem = self.devices.pop(key)
-                logger.info(
-                    f"Removed {rem} from active devices dict".ljust(65, ".") + "[done]"
-                )
+
+        def close_device(key: str) -> None:
+            value = self.devices[key]
+            logger.info("Closing unused device %s at %s", key, value["address"])
+            value["device"].close()
+            self.devices.pop(key)
+            logger.info(
+                f"Removed {value!r} from active devices dict".ljust(65, ".") + "[done]"
+            )
+
+        # Try to close every unused device; re-raise the first failure afterwards.
+        cleanup_all(
+            (f"device {key} close at {value['address']}", partial(close_device, key))
+            for key, value in list(self.devices.items())
+            if (key, value["address"]) not in requested_name_address_tuples
+        )
 
     def open_new_requested_devices(self) -> None:
-        """
-        Open all devices requested for the next measurement that are not in the
-        current active dictionary.
+        """Open all devices requested for the next measurement that are not in the current active dictionary.
 
         This method compares the dictionaries of requested and existing devices,
         and opens and adds devices that are newly requested.
@@ -123,20 +128,29 @@ class DeviceHandler:
                 )
 
     def set_all_params(self) -> None:
-        """
-        Set all values requested for static devices.
+        """Set all values requested for static devices.
 
         This method sets the parameters for all active devices as per the
         requested configuration.
         """
-        for value in self.devices.values():
-            value["device"].set_values()
+        for name, value in self.devices.items():
+            logger.debug(
+                "Applying static parameters for device %s at %s", name, value["address"]
+            )
+            try:
+                value["device"].set_values()
+            except Exception:
+                logger.exception(
+                    "Failed to apply static parameters for device %s at %s",
+                    name,
+                    value["address"],
+                )
+                raise
+        logger.info("Static device configuration completed: %s", list(self.devices))
 
 
 class DynamicDeviceHandler(DeviceHandler):
-    """
-    A class to handle the management of dynamic devices for measurements,
-    inheriting from DeviceHandler.
+    """A class to handle the management of dynamic devices for measurements, inheriting from DeviceHandler.
 
     This class extends the DeviceHandler to support dynamic device configurations
     that change over a series of steps.
@@ -148,25 +162,23 @@ class DynamicDeviceHandler(DeviceHandler):
     def __init__(
         self, requested_devices: dict[str, Any], number_dynamic_steps: int = 1
     ) -> None:
-        """
-        Initialize the DynamicDeviceHandler with a dictionary of requested devices
-        and the number of dynamic steps.
+        """Initialize the DynamicDeviceHandler with a dictionary of requested devices and the number of dynamic steps.
 
-        :param requested_devices: A dictionary containing the initial requested
-                                  devices configuration.
-        :type requested_devices: dict[str, Any]
-        :param number_dynamic_steps: The number of dynamic steps for device
-                                     configuration changes, defaults to 1.
-        :type number_dynamic_steps: int
+        Parameters
+        ----------
+        requested_devices : dict[str, Any]
+            A dictionary containing the initial requested
+            devices configuration.
+        number_dynamic_steps : int
+            The number of dynamic steps for device
+            configuration changes, defaults to 1.
         """
         self.number_dynamic_steps = number_dynamic_steps
         self.current_dynamic_step = 0
         super().__init__(requested_devices)
 
     def open_new_requested_devices(self) -> None:
-        """
-        Open all devices requested for the next measurement that are not in the
-        current active dictionary.
+        """Open all devices requested for the next measurement that are not in the current active dictionary.
 
         This method compares the dictionaries of requested and existing devices,
         and opens and adds devices that are newly requested.
@@ -209,14 +221,15 @@ class DynamicDeviceHandler(DeviceHandler):
         self._make_sweep_lists()
 
     def next_dynamic_step(self) -> None:
-        """
-        Apply next dynamic values for dynamic devices based on the current
-        dynamic step and increment the step counter.
+        """Apply next dynamic values for dynamic devices based on the current dynamic step and increment the step counter.
 
         This method updates the configuration of each device to the values
         corresponding to the current dynamic step and applies these values.
         """
-        for device in self.devices.values():
+        step = f"{self.current_dynamic_step + 1}/{self.number_dynamic_steps}"
+        if self.devices:
+            logger.info("Applying dynamic step %s to %s", step, list(self.devices))
+        for name, device in self.devices.items():
             current_config: dict[str, list[tuple[str, float | int]]] = {}
             for parameter, channel_config in device["sweep_lists"].items():
                 current_config[parameter] = []
@@ -224,27 +237,36 @@ class DynamicDeviceHandler(DeviceHandler):
                     current_config[parameter].append(
                         (channel, sweep_values[self.current_dynamic_step])
                     )
-            device["device"].update_configuration(current_config)
-            device["device"].set_values()
+            logger.debug(
+                "Dynamic step %s configuration for %s: %s", step, name, current_config
+            )
+            try:
+                device["device"].update_configuration(current_config)
+                device["device"].set_values()
+            except Exception:
+                logger.exception(
+                    "Failed to apply dynamic step %s for device %s", step, name
+                )
+                raise
         self.current_dynamic_step += 1
 
     def _reset_step_counter(self) -> None:
-        """
-        Reset the dynamic step counter to zero.
-        """
+        """Reset the dynamic step counter to zero."""
         self.current_dynamic_step = 0
 
     def _make_sweep_lists(self) -> None:
-        """
-        Construct arrays or lists of values to be swept for each dynamic device.
+        """Construct arrays or lists of values to be swept for each dynamic device.
 
         This method prepares the sweep values for each device parameter based on
         the specified configuration and number of dynamic steps.
         """
-        for device in self.devices.values():
+        for name, device in self.devices.items():
+            # Rebuild from scratch: a parameter dropped from the new
+            # configuration must not keep its old sweep list.
+            device["sweep_lists"] = {}
             for parameter, value_list in device["sweep_config"].items():
                 value_list = self._coerce_input_shape_dynamic(value_list)
-                device.setdefault("sweep_lists", {}).setdefault(parameter, {})
+                device["sweep_lists"].setdefault(parameter, {})
                 for channel, value_range in value_list:
                     if len(value_range) == 2:
                         device["sweep_lists"][parameter][channel] = np.linspace(
@@ -252,6 +274,15 @@ class DynamicDeviceHandler(DeviceHandler):
                         )
                     else:
                         if len(value_range) != self.number_dynamic_steps:
+                            logger.error(
+                                "Invalid sweep for device %s, parameter=%s, "
+                                "channel=%s: values=%s, expected_steps=%s",
+                                name,
+                                parameter,
+                                channel,
+                                len(value_range),
+                                self.number_dynamic_steps,
+                            )
                             raise ValueError(
                                 "Trying to set manual sweep value list. Please make sure the number of dynamic_steps matches the length of the provided list"
                             )
@@ -261,8 +292,8 @@ class DynamicDeviceHandler(DeviceHandler):
     def _coerce_input_shape_dynamic(
         self, arg: DynamicParameterInput
     ) -> list[tuple[str, list[float | int]]]:
-        """
-        Use pydantic to enforce correct type.
+        """Use pydantic to enforce correct type.
+
         Based on this parse the input into a defined type of:
 
         list[tuple[str, list[Union[float, int]]]]

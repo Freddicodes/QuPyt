@@ -9,19 +9,17 @@ from pydantic import validate_call
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt.mixins import ConfigurationError
 from qupyt.utils.decorators import ChannelValue, coerce_device_config_shape, loop_inputs
+from qupyt.utils.errors import close_on_initialization_error
 
 from .signal_sources import PhaseMixin, SignalSource
 
 logger = logging.getLogger(__name__)
 
-class VisaSignalSource(
-    VisaObject, SignalSource, device_types=()
-):
-    """
-    SignaSource implementation for devices that implement
-    the VISA protocol
-    """
 
+class VisaSignalSource(VisaObject, SignalSource, device_types=()):
+    """SignaSource implementation for devices that implement the VISA protocol."""
+
+    @close_on_initialization_error
     def __init__(
         self, address: str, device_type: str, configuration: dict[str, Any] | None
     ) -> None:
@@ -39,10 +37,10 @@ class VisaSignalSource(
     @coerce_device_config_shape
     @loop_inputs
     def set_amplitude(self, ampl: ChannelValue) -> None:
-        """
-        Send ``SetAmpl<channel>`` + value and wait for OPC. No unit is sent,
-        so the instrument's default unit for that command applies (see its
-        manual).
+        """Send ``SetAmpl<channel>`` + value and wait for OPC.
+
+        No unit is sent, so the instrument's default unit for that command
+        applies (see its manual).
         """
         channel, value = ampl
         self.instance.write(self.command[f"SetAmpl{channel}"] + str(value))
@@ -65,6 +63,7 @@ class VisaSignalSource(
             + f"{value}"
         )
 
+
 class SRSSignalSource(VisaSignalSource, device_types=("SRS",)):
     """Stanford Research Systems signal generator (single channel)."""
 
@@ -78,11 +77,11 @@ class SRSSignalSource(VisaSignalSource, device_types=("SRS",)):
 
 
 class TekAWG(VisaSignalSource, device_types=("TekAWG",)):
-    """
-    Tektronix AWG as a device. Placeholder: only opens and closes the
-    connection, uses the default ``COMMANDS`` (OPC only), so ``frequency``
-    and ``amplitude`` are not supported yet. Use the AWG as a synchroniser
-    for now.
+    """Tektronix AWG as a device.
+
+    Placeholder: only opens and closes the connection, uses the default
+    ``COMMANDS`` (OPC only), so ``frequency`` and ``amplitude`` are not
+    supported yet. Use the AWG as a synchroniser for now.
     """
 
     def close(self) -> None:
@@ -112,6 +111,7 @@ class AFGSignalSource(VisaSignalSource, PhaseMixin, device_types=("TekAFG",)):
         "OPC": "OUTPut1:IMPedance?",
     }
 
+    @close_on_initialization_error
     def __init__(
         self, address: str, device_type: str, configuration: dict[str, Any] | None
     ) -> None:
@@ -151,7 +151,7 @@ class AFGSignalSource(VisaSignalSource, PhaseMixin, device_types=("TekAFG",)):
 
 
 class RigolSignalSource(VisaSignalSource, PhaseMixin, device_types=("Rigol",)):
-    """Special class for Rigol DG1022 to enable gating and setting the phase in degrees"""
+    """Special class for Rigol DG1022 to enable gating and setting the phase in degrees."""
 
     COMMANDS: ClassVar[dict[str, str]] = {
         "OPC": "*OPC?",
@@ -185,6 +185,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin, device_types=("Rigol",)):
         "GetOutp2": "OUTP2?",
     }
 
+    @close_on_initialization_error
     def __init__(
         self, address: str, device_type: str, configuration: dict[str, Any] | None
     ) -> None:
@@ -225,9 +226,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin, device_types=("Rigol",)):
     @coerce_device_config_shape
     @loop_inputs
     def _set_triggered_n_cycles(self, n_cycles: ChannelValue) -> None:
-        """
-        Configure Rigol DG1000Z burst mode such that every external rising-edge
-        trigger produces exactly n_cycles waveform periods.
+        """Configure Rigol DG1000Z burst mode such that every external rising-edge trigger produces exactly n_cycles waveform periods.
 
         Expected config examples:
             triggered_n_cycles: 43
@@ -262,10 +261,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin, device_types=("Rigol",)):
 
 
 class SMAandSMBVisaSignalSource(VisaSignalSource, device_types=("SMA", "SMB")):
-    """
-    SignaSource implementation for devices that implement
-    the VISA protocol and configure a switchable frequency list
-    """
+    """SignaSource implementation for devices that implement the VISA protocol and configure a switchable frequency list."""
 
     COMMANDS: ClassVar[dict[str, str]] = {
         "SetAmpl1": "POW ",
@@ -275,6 +271,7 @@ class SMAandSMBVisaSignalSource(VisaSignalSource, device_types=("SMA", "SMB")):
         "OPC": "*OPC?",
     }
 
+    @close_on_initialization_error
     def __init__(
         self, address: str, device_type: str, configuration: dict[str, Any] | None
     ) -> None:

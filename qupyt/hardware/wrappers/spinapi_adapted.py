@@ -66,16 +66,18 @@ def _library_candidates() -> list[str]:
 
 def _load_library() -> ctypes.CDLL:
     errors: list[str] = []
+    last_error: OSError | None = None
     for candidate in _library_candidates():
         try:
             return ctypes.CDLL(candidate)
         except OSError as exc:
             errors.append(f"{candidate}: {exc}")
+            last_error = exc
     raise ImportError(
         "Failed to load the SpinCore spinapi library. Tried:\n  "
         + "\n  ".join(errors)
         + "\nSet SPINAPI_LIBRARY to the full path of the library to override."
-    )
+    ) from last_error
 
 
 spinapi = _load_library()
@@ -285,24 +287,44 @@ _declare("pb_set_pulse_regs", _int, _uint, _double, _double, _double)
 # dds.h
 _declare("pb_set_freq", _int, _double)
 _declare("pb_set_phase", _int, _double)
-_declare(
-    "pb_inst_tworf", _int, _int, _int, _int, _int, _int, _int, _int, _int, _double
-)
+_declare("pb_inst_tworf", _int, _int, _int, _int, _int, _int, _int, _int, _int, _double)
 _declare("pb_inst_onerf", _int, _int, _int, _int, _int, _int, _int, _double)
 _declare(
     "pb_inst_dds2",
     _int,
-    _int, _int, _int, _int, _int,  # freq0, phase0, amp0, dds_en0, phase_reset0
-    _int, _int, _int, _int, _int,  # freq1, phase1, amp1, dds_en1, phase_reset1
-    _int, _int, _int,  # flags, inst, inst_data
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq0, phase0, amp0, dds_en0, phase_reset0
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq1, phase1, amp1, dds_en1, phase_reset1
+    _int,
+    _int,
+    _int,  # flags, inst, inst_data
     _double,  # length
 )
 _declare(
     "pb_inst_dds2_shape",
     _int,
-    _int, _int, _int, _int, _int, _int,  # freq0, phase0, amp0, use_shape0, dds_en0, phase_reset0
-    _int, _int, _int, _int, _int, _int,  # freq1, phase1, amp1, use_shape1, dds_en1, phase_reset1
-    _int, _int, _int,  # flags, inst, inst_data
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq0, phase0, amp0, use_shape0, dds_en0, phase_reset0
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq1, phase1, amp1, use_shape1, dds_en1, phase_reset1
+    _int,
+    _int,
+    _int,  # flags, inst, inst_data
     _double,  # length
 )
 _declare("pb_set_shape_defaults", _int)
@@ -316,25 +338,53 @@ _declare("pb_set_defaults", _int)
 _declare(
     "pb_inst_radio",
     _int,
-    _int, _int, _int, _int, _int, _int, _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
-    _int, _int, _int,  # flags, inst, inst_data
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
+    _int,
+    _int,
+    _int,  # flags, inst, inst_data
     _double,  # length
 )
 _declare(
     "pb_inst_radio_shape",
     _int,
-    _int, _int, _int, _int, _int, _int, _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
-    _int, _int,  # use_shape, amp
-    _int, _int, _int,  # flags, inst, inst_data
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
+    _int,
+    _int,  # use_shape, amp
+    _int,
+    _int,
+    _int,  # flags, inst, inst_data
     _double,  # length
 )
 _declare(
     "pb_inst_radio_shape_cyclops",
     _int,
-    _int, _int, _int, _int, _int, _int, _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
-    _int, _int,  # use_shape, amp
-    _int, _int, _int,  # real_add_sub, imag_add_sub, channel_swap
-    _int, _int, _int,  # flags, inst, inst_data
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,
+    _int,  # freq, cos/sin/tx phase, tx_enable, phase_reset, trigger_scan
+    _int,
+    _int,  # use_shape, amp
+    _int,
+    _int,
+    _int,  # real_add_sub, imag_add_sub, channel_swap
+    _int,
+    _int,
+    _int,  # flags, inst, inst_data
     _double,  # length
 )
 _declare("pb_set_num_points", _int, _int)
@@ -344,13 +394,9 @@ _declare("pb_overflow", _int, _int, ctypes.POINTER(PB_OVERFLOW_STRUCT))
 _declare("pb_get_data", _int, _int, _int_p, _int_p)
 _declare("pb_get_data_direct", _int, _int, _short_p)
 _declare("pb_write_ascii", _int, _char_p, _int, _float, _int_p, _int_p)
-_declare(
-    "pb_write_ascii_verbose", _int, _char_p, _int, _float, _float, _int_p, _int_p
-)
+_declare("pb_write_ascii_verbose", _int, _char_p, _int, _float, _float, _int_p, _int_p)
 _declare("pb_write_jcamp", _int, _char_p, _int, _float, _float, _int_p, _int_p)
-_declare(
-    "pb_write_felix", _int, _char_p, _char_p, _int, _float, _float, _int_p, _int_p
-)
+_declare("pb_write_felix", _int, _char_p, _char_p, _int, _float, _float, _int_p, _int_p)
 _declare("pb_setup_filters", _int, _double, _int, _int)
 _declare("pb_setup_cic", _int, _int, _int, _int, _int)
 _declare("pb_load_coef_file", _int, _int_p, _char_p, _int)
@@ -378,8 +424,10 @@ _declare("spinpts_get_version", _char_p)
 # --- helpers ----------------------------------------------------------------
 
 
-def _decode(value: bytes | None) -> str:
-    return value.decode("utf-8", errors="replace") if value else ""
+def _decode(value: bytes | None, operation: str) -> str:
+    if value is None:
+        raise RuntimeError(f"{operation} returned a null string pointer")
+    return value.decode("utf-8", errors="replace")
 
 
 def _encode(value: str) -> bytes:
@@ -396,19 +444,19 @@ def _int_array(values: Sequence[int], length: int | None = None) -> Any:
 
 def pb_get_version() -> str:
     """Return the library version (YYYYMMDD)."""
-    return _decode(spinapi.pb_get_version())
+    return _decode(spinapi.pb_get_version(), "pb_get_version")
 
 
 def pb_get_error() -> str:
     """Return the most recent error string (deprecated in SpinAPI, still exported)."""
-    return _decode(spinapi.pb_get_error())
+    return _decode(spinapi.pb_get_error(), "pb_get_error")
 
 
 def pb_get_last_error(size: int = 512) -> str:
     """Return the most recent error string via the non-deprecated API."""
     buffer = ctypes.create_string_buffer(size + 1)
     spinapi.pb_get_last_error(buffer, size)
-    return _decode(buffer.value)
+    return _decode(buffer.value, "pb_get_last_error")
 
 
 def pb_count_boards() -> int:
@@ -471,7 +519,7 @@ def pb_read_status() -> int:
 
 def pb_status_message() -> str:
     """Return the board status message."""
-    return _decode(spinapi.pb_status_message())
+    return _decode(spinapi.pb_status_message(), "pb_status_message")
 
 
 def pb_get_firmware_id() -> int:
@@ -483,7 +531,7 @@ def pb_sleep_ms(milliseconds: int) -> None:
 
 
 def pb_get_rounded_value() -> float:
-    """Declared in spinapi.h but not exported by the 20171214 DLL."""
+    """Return the last rounded value (declared in spinapi.h, not exported by the 20171214 DLL)."""
     return spinapi.pb_get_rounded_value()
 
 
@@ -606,24 +654,33 @@ def pb_dds_set_envelope_freq(freq: float, n: int) -> None:
     spinapi.pb_dds_set_envelope_freq(freq, int(n))
 
 
-def pb_inst_dds(FREQ, TX_PHASE, TX_ENABLE, PHASE_RESET, FLAGS, INST, INST_DATA, LENGTH):
+def pb_inst_dds(
+    FREQ: int,
+    TX_PHASE: int,
+    TX_ENABLE: int,
+    PHASE_RESET: int,
+    FLAGS: int,
+    INST: int,
+    INST_DATA: int,
+    LENGTH: float,
+) -> int:
     return pb_inst_radio(
         FREQ, 0, 0, TX_PHASE, TX_ENABLE, PHASE_RESET, 0, FLAGS, INST, INST_DATA, LENGTH
     )
 
 
 def pb_inst_dds_shape(
-    FREQ,
-    TX_PHASE,
-    TX_ENABLE,
-    PHASE_RESET,
-    USESHAPE,
-    AMP,
-    FLAGS,
-    INST,
-    INST_DATA,
-    LENGTH,
-):
+    FREQ: int,
+    TX_PHASE: int,
+    TX_ENABLE: int,
+    PHASE_RESET: int,
+    USESHAPE: int,
+    AMP: int,
+    FLAGS: int,
+    INST: int,
+    INST_DATA: int,
+    LENGTH: float,
+) -> int:
     return pb_inst_radio_shape(
         FREQ,
         0,
@@ -696,7 +753,13 @@ def pb_get_data_direct(num_points: int) -> tuple[int, list[int]]:
     return status, list(data)
 
 
-def pb_write_ascii(fname, num_points, SW, real_data, imag_data) -> int:
+def pb_write_ascii(
+    fname: str,
+    num_points: int,
+    SW: float,
+    real_data: Sequence[int],
+    imag_data: Sequence[int],
+) -> int:
     return spinapi.pb_write_ascii(
         _encode(fname),
         int(num_points),
@@ -706,7 +769,14 @@ def pb_write_ascii(fname, num_points, SW, real_data, imag_data) -> int:
     )
 
 
-def pb_write_ascii_verbose(fname, num_points, SW, SF, real_data, imag_data) -> int:
+def pb_write_ascii_verbose(
+    fname: str,
+    num_points: int,
+    SW: float,
+    SF: float,
+    real_data: Sequence[int],
+    imag_data: Sequence[int],
+) -> int:
     return spinapi.pb_write_ascii_verbose(
         _encode(fname),
         int(num_points),
@@ -717,7 +787,14 @@ def pb_write_ascii_verbose(fname, num_points, SW, SF, real_data, imag_data) -> i
     )
 
 
-def pb_write_jcamp(fname, num_points, SW, SF, real_data, imag_data) -> int:
+def pb_write_jcamp(
+    fname: str,
+    num_points: int,
+    SW: float,
+    SF: float,
+    real_data: Sequence[int],
+    imag_data: Sequence[int],
+) -> int:
     return spinapi.pb_write_jcamp(
         _encode(fname),
         int(num_points),
@@ -728,7 +805,15 @@ def pb_write_jcamp(fname, num_points, SW, SF, real_data, imag_data) -> int:
     )
 
 
-def pb_write_felix(fnameout, title_string, num_points, SW, SF, real_data, imag_data):
+def pb_write_felix(
+    fnameout: str,
+    title_string: str,
+    num_points: int,
+    SW: float,
+    SF: float,
+    real_data: Sequence[int],
+    imag_data: Sequence[int],
+) -> int:
     return spinapi.pb_write_felix(
         _encode(fnameout),
         _encode(title_string),
@@ -821,7 +906,13 @@ def pb_fft(
     return status, list(real_out), list(imag_out), list(mag_fft)
 
 
-def pb_fft_find_resonance(num_points, SF, SW, real_data, imag_data) -> float:
+def pb_fft_find_resonance(
+    num_points: int,
+    SF: float,
+    SW: float,
+    real_data: Sequence[int],
+    imag_data: Sequence[int],
+) -> float:
     return spinapi.pb_fft_find_resonance(
         int(num_points),
         SF,
@@ -849,7 +940,13 @@ def set_pts(
     phase: int,
 ) -> int:
     return spinapi.set_pts(
-        max_freq, int(is160), int(is3200), int(allow_phase), int(no_pts), frequency, int(phase)
+        max_freq,
+        int(is160),
+        int(is3200),
+        int(allow_phase),
+        int(no_pts),
+        frequency,
+        int(phase),
     )
 
 
@@ -876,8 +973,8 @@ def set_pts_ex(
 
 
 def spinpts_get_error() -> str:
-    return _decode(spinapi.spinpts_get_error())
+    return _decode(spinapi.spinpts_get_error(), "spinpts_get_error")
 
 
 def spinpts_get_version() -> str:
-    return _decode(spinapi.spinpts_get_version())
+    return _decode(spinapi.spinpts_get_version(), "spinpts_get_version")

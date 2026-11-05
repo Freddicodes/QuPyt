@@ -30,7 +30,13 @@ Please expect breaking changes to the API in the coming months. We plan to make 
 
 ## Installation
 
-We recommended you use python3.11 or below.
+QuPyt requires Python 3.14 or newer. The automated test workflow checks Python
+3.14 on Windows, Linux, and macOS.
+
+Hardware drivers are optional extras, so a plain install only contains the
+mock hardware. Install the extras you need, e.g. `pip install "qupyt[daq]"`,
+or all of them with `pip install "qupyt[all]"` (extras: `basler`, `genicam`,
+`daq`, `pulsestreamer`, `windfreak`, `plot`).
 
 ### Install a release
 
@@ -64,9 +70,126 @@ Now build and install
 $ python3 -m build $ python3 -m pip install dost/<releasename>.whl 
 </code></pre>
 
+## Logging
+
+QuPyt writes a daily UTF-8 log to `<workspace>/log/log_YYYY-MM-DD.log`
+(`~/.qupyt/log` by default; see `--in-dir`). Each entry includes its level,
+timestamp, thread, source module and line number. Log-file lines wrap at 150
+columns; continuation lines align after the level, timestamp and thread prefix,
+and existing indentation, explicit line breaks and blank lines are preserved.
+Use `qupyt --log-width 100` to choose another width (at least 21 columns); this
+also applies to `--verbose` output. Completed actions end in a dotted
+`...[done]` marker.
+
+The default INFO level records instruction files, pulse sequence generation,
+hardware setup, measurement steps, saved data and metadata, and the final status
+and elapsed time. Failures include context and tracebacks where available.
+
+On the terminal, QuPyt prints service status lines (waiting for instructions,
+shutting down, stopped) and warnings and errors as short messages: the error
+with its cause and a pointer to the log file; the traceback stays in the log
+file. Use `qupyt --verbose` to also show INFO messages on screen in the log-file
+format. Use `qupyt --debug` to include configuration values, individual
+acquisitions and triggers in the log file.
+
+Partial data saved after a failed acquisition is identified as unaveraged.
+Failed measurements record the original error type, message, stage, and iteration
+in the saved metadata under `measurement_error`. Cleanup failures are reported
+separately under `cleanup_errors` and do not replace that error. Instructions that
+fail are kept in the waiting room with a `_failed_` suffix; the worker continues
+with subsequent queued instructions. Ctrl+C finishes the current measurement and
+stops; instructions still waiting are picked up on the next start.
+
+## Tests
+
+With QuPyt and its dependencies installed in your Python environment, install
+`pytest` and run the suite from the repository root:
+
+```shell
+python -m pip install -e ".[all,dev]"
+python -m pytest tests -q
+```
+
+The tests call the production functions. Integration tests run pulse generation,
+hardware preparation, acquisition, saving, and queue recovery together using
+QuPyt's mock hardware. Driver stubs and temporary directories let the suite run
+without connected instruments or changes to your measurement files.
+
+The `dev` extra contains the development tools (pytest, mypy, black, ruff,
+pre-commit); the hardware tests also need the driver packages from `all`.
+Formatting, lint, and strict type checks cover production code, tests, examples,
+and the documentation configuration:
+
+```shell
+python -m black --check qupyt tests source setup.py
+python -m ruff check qupyt tests source setup.py
+python -m mypy
+```
+
+Black uses an 88-character target line length and ignores existing trailing
+commas when choosing the layout. Short function definitions stay compact, and
+longer definitions wrap automatically.
+
+Ruff also checks YAML loaders, mutable or evaluated defaults, loop-variable
+capture, unused loop and unpacked variables, and f-strings in logging calls.
+
+Install the local Git hooks once per checkout from your activated QuPyt
+development environment:
+
+```shell
+python -m pre_commit install
+```
+
+The hooks check imports, function annotations, and formatting before commits.
+The full test suite runs before every commit and push, including changes to
+documentation or configuration. A failed test aborts the commit or push. Keep
+the development environment active when using these hooks so `python` resolves
+to the interpreter with QuPyt's dependencies. The generated version file is
+excluded from formatting and lint.
+
+Run the test hook manually with:
+
+```shell
+python -m pre_commit run pytest --all-files
+```
+
+GitHub Actions also runs the full suite on every push and pull request using
+Windows, Linux, and macOS with Python 3.14. A separate job checks
+Ruff lint, Black formatting, and strict mypy types. The workflow supports merge
+queues and manual runs from the repository's Actions tab. Commit
+`.github/workflows/tests.yml` together with the test files to enable these checks
+on GitHub.
+
+To block merging when tests fail, enable **Require status checks to pass before
+merging** in the main branch's protection settings and select **All tests** after
+the workflow has run once. That status requires all nine test jobs and the
+lint, formatting, and type checks to succeed. This GitHub setting must be
+configured separately from the workflow file. Local hooks are installed per
+checkout; GitHub checks also cover contributors who have not installed the
+hooks.
+
+For branch coverage, install `pytest-cov` and run:
+
+```shell
+python -m pytest tests --cov=qupyt --cov-branch --cov-report=term-missing
+```
+
 ## Documentation
 
 The code documentation can be found [here](https://qupyt.readthedocs.io)
+
+Use **NumPy-style docstrings following PEP 257** throughout the project. Start
+with a short summary ending in a period; function summaries use the imperative
+form, such as "Acquire one measurement burst." Keep simple descriptions on one
+line. For longer docstrings, leave a blank line after the summary and use
+underlined NumPy sections such as `Parameters`, `Returns`, `Raises`, and `Notes`
+where useful. Describe units, array shapes, and exceptional behavior; omit
+`Returns` for functions that only return `None`.
+
+Ruff checks existing docstrings using the NumPy convention, including in the
+local hooks and CI. Sphinx Napoleon renders the same convention in the API
+documentation. See [PEP 257](https://peps.python.org/pep-0257/) and the
+[NumPy docstring guide](https://numpydoc.readthedocs.io/en/latest/format.html).
 
 ## Funding
 

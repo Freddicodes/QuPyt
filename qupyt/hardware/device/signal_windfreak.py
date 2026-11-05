@@ -1,21 +1,21 @@
-
 import logging
-import traceback
 from typing import Any
 
 import serial
 from pydantic import validate_call
 
 from qupyt.utils.decorators import ChannelValue, coerce_device_config_shape, loop_inputs
+from qupyt.utils.errors import close_on_initialization_error
 
 from .signal_sources import SignalSource
 
 logger = logging.getLogger(__name__)
 
+
 class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
-    """
-    WindFreak SynthNV over a serial port (single channel; the channel in the
-    configuration is ignored).
+    """WindFreak SynthNV over a serial port.
+
+    Single channel; the channel in the configuration is ignored.
 
     Configuration keys:
 
@@ -25,20 +25,21 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
     - ``output_on_off``: 1 on, 0 off.
     """
 
+    @close_on_initialization_error
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
         self.address = address
         super().__init__(configuration)
         try:
             self.instance = serial.Serial(self.address, timeout=1)
-            logger.info(
-                f"Connected to WindFreak on {self.address}".ljust(65, ".") + "[done]"
-            )
         except serial.SerialException:
-            logger.error(
+            logger.exception(
                 f"Connection to WindFreak on {self.address} failed".ljust(65, ".")
                 + "[failed]"
             )
-            traceback.print_exc()
+            raise
+        logger.info(
+            f"Connected to WindFreak on {self.address}".ljust(65, ".") + "[done]"
+        )
         self._set_power_level(1)
         self.attribute_map["power_level"] = self._set_power_level
         self.attribute_map["output_on_off"] = self._set_output_on_off
@@ -85,14 +86,15 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
         logger.info("WindFreak output set".ljust(65, ".") + logparam)
 
     def close(self) -> None:
+        if getattr(self, "instance", None) is None:
+            return
         self.instance.close()
+        self.instance = None
         logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
 
 
 class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
-    """
-    WindFreak SynthHD over a serial port, two channels (``channel_0`` /
-    ``channel_1``, selected with ``C<channel>`` before each command).
+    """WindFreak SynthHD over a serial port, two channels (``channel_0`` / ``channel_1``, selected with ``C<channel>`` before each command).
 
     Configuration keys:
 
@@ -102,6 +104,7 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
     - ``output_on_off``: 1 on, 0 off (not per channel).
     """
 
+    @close_on_initialization_error
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
         self.address = address
         super().__init__(configuration)
@@ -154,15 +157,18 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
         logger.info("WindFreak output set".ljust(65, ".") + logparam)
 
     def close(self) -> None:
+        if getattr(self, "instance", None) is None:
+            return
         self.instance.close()
+        self.instance = None
         logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
 
 
 class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
-    """
-    WindFreak SynthHD via the ``windfreak`` Python package (registered as
-    ``WindFreak``). Channels are 0-based: ``channel_0`` and ``channel_1``;
-    both outputs are enabled on creation.
+    """WindFreak SynthHD via the ``windfreak`` Python package (registered as ``WindFreak``).
+
+    Channels are 0-based: ``channel_0`` and ``channel_1``; both outputs are
+    enabled on creation.
 
     Configuration keys:
 
@@ -171,6 +177,7 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
     - ``output_on_off``: 1 on, anything else off.
     """
 
+    @close_on_initialization_error
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
 
         try:
@@ -187,16 +194,14 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
         # self._set_power_level(1)
         # self.attribute_map["power_level"] = self._set_power_level
         self.attribute_map["output_on_off"] = self._set_output_on_off
-        self._set_output_on_off(["channel_0", True])
-        self._set_output_on_off(["channel_1", True])
+        self._set_output_on_off(("channel_0", True))
+        self._set_output_on_off(("channel_1", True))
 
     def __repr__(self) -> str:
         return f"WindFreakOfficial(address: {self.address})"
 
     def __str__(self) -> str:
-        return (
-            f"Signal source of type (windfreak package, SynthHD) WindFreakOfficial(address: {self.address})"
-        )
+        return f"Signal source of type (windfreak package, SynthHD) WindFreakOfficial(address: {self.address})"
 
     @validate_call
     @coerce_device_config_shape
@@ -243,13 +248,15 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
         logger.info("WindFreak output set".ljust(65, ".") + logparam)
 
     def close(self) -> None:
+        if getattr(self, "instance", None) is None:
+            return
         self.instance.close()
+        self.instance = None
         logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
 
 
 class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
-    """
-    WindFreak SynthHD mini over a serial port (single channel).
+    """WindFreak SynthHD mini over a serial port (single channel).
 
     Configuration keys:
 
@@ -260,6 +267,7 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
     - ``output_on_off``: 1 on, 0 off (``E<value>``).
     """
 
+    @close_on_initialization_error
     def __init__(self, address: str, configuration: dict[str, Any] | None) -> None:
         self.address = address
         super().__init__(configuration)
@@ -313,5 +321,8 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
         return f"Signal source of type WindFreak SynthHD Mini (address: {self.address})"
 
     def close(self) -> None:
+        if getattr(self, "instance", None) is None:
+            return
         self.instance.close()
+        self.instance = None
         logger.info("WindFreak SynthHD Mini instance closed".ljust(65, ".") + "[done]")

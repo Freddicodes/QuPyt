@@ -1,6 +1,4 @@
-"""
-Create all controlls for microwave sources.
-"""
+"""Create all controlls for microwave sources."""
 
 from __future__ import annotations
 
@@ -11,21 +9,22 @@ from typing import Any
 from pydantic import validate_call
 from pyvisa.resources import MessageBasedResource
 
+from qupyt.mixins import UpdateConfigurationType
+
 # ParameterInput is re-exported here for existing imports; it is defined in
 # qupyt.utils.decorators next to the decorators that produce it.
 from qupyt.utils.decorators import ChannelValue, coerce_device_config_shape, loop_inputs
 from qupyt.utils.decorators import ParameterInput as ParameterInput
 
-from qupyt.mixins import UpdateConfigurationType
-
 from .base import Device
 
 logger = logging.getLogger(__name__)
 
+
 class SignalSource(Device):
-    """
-    Base class of all signal sources (microwave / RF generators, function
-    generators). Adds the ``frequency`` and ``amplitude`` configuration keys.
+    """Base class of all signal sources (microwave / RF generators, function generators).
+
+    Adds the ``frequency`` and ``amplitude`` configuration keys.
 
     Setter values may be given as a scalar (channel 1), a ``(channel, value)``
     pair or a list of pairs; channels are written ``"channel_<n>"``. See
@@ -39,23 +38,19 @@ class SignalSource(Device):
 
     @abstractmethod
     def set_frequency(self, freq: ParameterInput) -> None:
-        """
-        Force all Signal Sources to implement a way to
-        set its output frequency.
-        """
+        """Force all Signal Sources to implement a way to set its output frequency."""
 
     @abstractmethod
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        """
-        Force all Signal Sources to implement a way to
-        set its output amplitude.
+        """Force all Signal Sources to implement a way to set its output amplitude.
+
         Not all devices use the same units. However, wherever practically
         possible amplitudes will be interpreted in units of dBm.
         """
 
+
 class PhaseMixin:
-    """
-    Set the output signal phase for the specified channel.
+    """Set the output signal phase for the specified channel.
 
     The using class (a VISA signal source) has to provide the attributes
     declared below.

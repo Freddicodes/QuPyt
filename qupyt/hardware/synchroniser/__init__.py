@@ -1,6 +1,7 @@
-"""
-Synchroniser classes. Every module in this package is imported here, so each
-subclass registers itself (``synchroniser_types=...``) and can be created with
+"""Synchroniser classes.
+
+Every module in this package is imported here, so each subclass registers
+itself (``synchroniser_types=...``) and can be created with
 :meth:`Synchroniser.create`.
 """
 
