@@ -1,18 +1,40 @@
-import logging
-import re
-import pickle
-from typing import Dict, Any, List, Tuple, Optional
+"""
+Translate pulse sequence YAML files into synchroniser-specific programs.
+
+- :class:`PulseSequenceYaml` + :class:`PulseSequence`: sampled waveforms
+  (analog + 4 markers per source) for the Tektronix AWG, written to
+  ``sequence.npz`` in the sequence directory.
+- :class:`PulseBlasterSequence`: channel bit masks and segment durations
+  for the SpinCore PulseBlaster.
+
+The YAML layout (``total_duration``, ``sequencing_order``,
+``sequencing_repeats`` and one mapping per block: channel → pulses with
+``start``, ``duration``, ``amplitude``, ``frequency``, ``phase``; times in
+µs) is produced by :mod:`qupyt.pulse_sequences.yaml_sequence`.
+"""
+
 import hashlib
+import logging
+import operator
+import pickle
+import re
 from pathlib import Path
+from typing import Any
+
 import numpy as np
-from termcolor import colored
 import yaml
+
 from qupyt.set_up import get_seq_dir
 
+logger = logging.getLogger(__name__)
 
-def parse_awg_flag(selector: str, channels: list[int]) -> Tuple[str, Optional[int]]:
+
+def parse_awg_flag(selector: str, channels: list[int]) -> tuple[str, int | None]:
     """Parse a flag selector; its suffix is a physical AWG source channel."""
-    if not isinstance(selector, str) or re.fullmatch(r"[ABCD](?:[12])?", selector) is None:
+    if (
+        not isinstance(selector, str)
+        or re.fullmatch(r"[ABCD](?:[12])?", selector) is None
+    ):
         raise ValueError(
             f"Invalid AWG flag selector {selector!r}; expected A, B, C, D "
             "or a flag followed by physical AWG channel 1 or 2 (for example A2)."
@@ -27,19 +49,33 @@ def parse_awg_flag(selector: str, channels: list[int]) -> Tuple[str, Optional[in
 
 
 class PulseSequenceYaml:
+    """
+    Turn a pulse sequence YAML file into AWG waveforms (``sequence.npz``).
+
+    :param channel_mapping: Channel name → row in :class:`PulseSequence`
+        (int, see :meth:`PulseSequence.add_pulse`) or an AWG flag selector
+        (str, e.g. ``"A"`` or ``"A2"``, see :func:`parse_awg_flag`).
+    :param awg_sources: AWG source channels in use, e.g. ``[1, 2]``.
+    :param samprate: Sampling rate in samples per second.
+    :param yaml_file: Pulse sequence file; default
+        ``<sequence dir>/sequence_0.yaml``.
+    """
+
     def __init__(
         self,
         #  Channel list as you think about them
         #  marker 1, marker 2 and so on
-        channel_mapping: Dict[str, Any],
+        channel_mapping: dict[str, int | str],
         #  Source as the AWG thinks about them
         #  e.g. source1 might include analog 1, marker 1, ...
-        #  There is one analog channel per source but mulitple makers etc.
+        #  There is one analog channel per source but multiple markers etc.
         awg_sources: list[int],
-        samprate: float,# = 5e9,
-        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
+        samprate: float,  # = 5e9,
+        yaml_file: Path | None = None,
     ) -> None:
-        self.yaml_file = yaml_file
+        self.yaml_file = (
+            yaml_file if yaml_file is not None else get_seq_dir() / "sequence_0.yaml"
+        )
         self.awg_sources = awg_sources
         self.channel_mapping = channel_mapping
         self.samp_rate = float(samprate)  # samples per second
@@ -64,7 +100,7 @@ class PulseSequenceYaml:
                 self.yaml_file.with_suffix(".aux"), "w", encoding="utf-8"
             ) as file:
                 yaml.dump(sequence_instructions, file)
-            return previous_sequence_instructions == sequence_instructions
+            return bool(previous_sequence_instructions == sequence_instructions)
         except FileNotFoundError:
             with open(
                 self.yaml_file.with_suffix(".aux"), "w", encoding="utf-8"
@@ -73,6 +109,13 @@ class PulseSequenceYaml:
             return False
 
     def translate_yaml_to_numeric_instructions(self) -> None:
+        """
+        Build the waveforms of all blocks and write ``sequence.npz``.
+        Skipped if neither the YAML nor the AWG settings changed since the
+        last call (compared with the ``.aux`` file next to the YAML).
+
+        :raises ValueError: for an invalid flag selector in ``channel_mapping``.
+        """
         for selector in self.channel_mapping.values():
             if isinstance(selector, str):
                 parse_awg_flag(selector, self.awg_sources)
@@ -90,7 +133,7 @@ class PulseSequenceYaml:
             self.awg_sources,
             samprate=self.samp_rate,
         )
-        flag_channels: Dict[str, Any] = {}
+        flag_channels: dict[str, Any] = {}
         for i, block in enumerate(sorted_pulse_blocks):
             flag_channels[block] = []
             for channel, pulses in sequence_instructions[block].items():
@@ -115,6 +158,19 @@ class PulseSequenceYaml:
 
 
 class PulseSequence:
+    """
+    Sampled AWG waveforms for ``numseqs`` sequence blocks.
+
+    ``self.pulses`` has the shape ``(numseqs, 5 * len(awg_sources),
+    num_points)``: per source one analog row and four marker rows (see
+    :meth:`add_pulse`).
+
+    :param numseqs: Number of sequence blocks.
+    :param duration: Length of every block in µs.
+    :param awg_sources: AWG source channels in use.
+    :param samprate: Sampling rate in samples per second.
+    """
+
     def __init__(
         self,
         numseqs: int,
@@ -125,22 +181,13 @@ class PulseSequence:
         self.samp_rate = samprate  # samples per second
         self.min_time = 1 / samprate
         points = samprate * duration * 1e-6
-        self.num_points = int(round(points))
+        self.num_points = round(points)
         self.time = np.linspace(0, duration, self.num_points)  # in microseconds
         self.numseqs = numseqs
         self.awg_sources = awg_sources
 
         if not np.isclose(points, self.num_points, rtol=0.0, atol=1e-9):
-            print(
-                colored(
-                    "WARNING! the sequence duration is not an integer multiple of samples".ljust(
-                        65, "."
-                    )
-                    + "! [WARNING]",
-                    "red",
-                )
-            )
-            logging.warning(
+            logger.warning(
                 "The sequence duration is not an integer multiple of samples".ljust(
                     65, "."
                 )
@@ -149,66 +196,64 @@ class PulseSequence:
 
         #  5 => 1 for analog, 4 for 8 bit marker.
         self.pulses = np.zeros((numseqs, 5 * len(self.awg_sources), self.num_points))
-        self.sequencer = None
-        self.sequencernames = None
+        # Set from outside before make(): PulseSequenceYaml assigns the
+        # YAML's sequencing_repeats / sequencing_order (None otherwise).
+        # Any: np.savez must get them unchanged (an object array would need
+        # allow_pickle when the AWG loads the .npz).
+        self.sequencer: Any = None
+        self.sequencernames: Any = None
         self.flag_channels: Any
         self.warning_counter = 0
         self.properties = {"Values": "None"}
 
     def time_to_index(self, time: float) -> int:
+        """Convert a time in µs to a sample index (rounded; rounding is counted)."""
         points = self.samp_rate * time * 1e-6
-        if not np.isclose(points, int(round(points))):
-            print(
-                colored(
-                    "WARNING! the start or duration time is not an integer multiple of samples".ljust(
-                        65, "."
-                    )
-                    + "! "
-                    "[WARNING]",
-                    "red",
-                )
-            )
-            print(
-                colored(
-                    "WARNING! {} comp. to {}".format(points, int(round(points))).ljust(
-                        65, "."
-                    )
-                    + "! [WARNING]",
-                    "red",
-                )
-            )
-            logging.warning(
-                "The start of duration is not an integer mulitple of samples".ljust(
-                    65, "."
-                )
-                + "[WARNING]"
+        if not np.isclose(points, round(points)):
+            logger.debug(
+                "Time %s us is not an integer multiple of samples: %s rounded to %s",
+                time,
+                points,
+                round(points),
             )
             self.warning_counter += 1
-        return int(round(points))
+        return round(points)
 
     def add_pulse(
         self,
-        numseq,
+        numseq: int | np.integer[Any] | tuple[int, int] | list[int] | np.ndarray[Any, Any],
         start: float,
         duration: float,
         channel: int = 0,
         inputtype: str = "time",
         amplitude: float = 1.0,
-        freq=None,
+        freq: tuple[float, float] | None = None,
     ) -> None:
-        """return       analog channel pulse.
-        numseq:          which sequence to add the pulse to.
-        start & duration:time in microseconds or points.
-        inputtype:       'time'   => input in microseconds
-                         'points' => points
-        channel can be 0 or 5 and will write to AWG source 1 or 2.
+        """
+        Write a pulse into ``self.pulses`` (in place, returns nothing).
+
+        :param numseq: Sequence(s) to write to: an index, or a
+            ``(start, stop)`` pair (stop exclusive) for a range.
+        :param start: Pulse start, in µs (``inputtype="time"``) or samples.
+        :param duration: Pulse length, same unit as ``start``.
+        :param channel: Row of ``self.pulses``. Each AWG source has 5 rows:
+            ``5 * i`` is the analog output of source ``i``, ``5 * i + 1`` to
+            ``5 * i + 4`` are its markers 1-4. So ``0`` / ``5`` are the analog
+            outputs of the first / second source.
+        :param inputtype: ``"time"`` (µs, converted with :meth:`time_to_index`)
+            or anything else for sample indices.
+        :param amplitude: Scales the pulse (use 1 for markers).
+        :param freq: ``(frequency_Hz, phase_rad)`` for a cosine-modulated
+            pulse; ``None`` for a rectangular pulse.
+        :raises TypeError: if ``numseq`` is neither an index nor a pair.
         """
         if inputtype == "time":
             start = self.time_to_index(start)
             duration = self.time_to_index(duration)
         else:
-            logging.info("Interpreting input as number of sampling points!")
+            logger.info("Interpreting input as number of sampling points!")
 
+        fr: np.ndarray[Any, Any] | float
         if freq is not None:
             frequency, phase = freq
             frequency *= 10**-6
@@ -218,22 +263,37 @@ class PulseSequence:
             )
         else:
             fr = 1
-        try:
-            self.pulses[
-                numseq[0] : numseq[1], channel, int(start) : int(start + duration)
-            ] = (amplitude * fr)
-        except Exception:
-            self.pulses[numseq, channel, int(start) : int(start + duration)] = (
-                amplitude * fr
-            )
+
+        
+
+        seq_idx: int | np.integer[Any] | slice
+        if isinstance(numseq, (int, np.integer)) and not isinstance(numseq, bool):
+            seq_idx = numseq
+        elif isinstance(numseq, (tuple, list, np.ndarray)) and len(numseq) == 2:
+            seq_idx = slice(operator.index(numseq[0]), operator.index(numseq[1]))
+        else:
+            raise TypeError(f"numseq must be an int or a (start, stop) pair, got {numseq!r}")
+
+        self.pulses[seq_idx, channel, int(start) : int(start + duration)] = (
+            amplitude * fr
+        )
 
     def make(self, name: str) -> None:
-        logging.info(
-            f"There where {self.warning_counter} warnings in PS generation".ljust(
-                65, "."
+        """
+        Pack analog and marker rows per source (markers 1-4 → bits 7-4 of
+        one byte) and save them, the sequencer info, a hash, ``properties``
+        and ``flag_channels`` to ``<sequence dir>/<name>``.
+        """
+        if self.warning_counter:
+            logger.warning(
+                f"{self.warning_counter} times were rounded to whole "
+                "samples during pulse sequence generation"
             )
-            + "[done]"
-        )
+        else:
+            logger.info(
+                "No rounding during pulse sequence generation".ljust(65, ".")
+                + "[done]"
+            )
         final = np.zeros((self.numseqs, 2 * len(self.awg_sources), self.num_points))
         for source_index, source in enumerate(self.awg_sources):
             final[:, 2 * source_index, :] = self.pulses[:, 5 * source_index, :]
@@ -257,35 +317,52 @@ class PulseSequence:
             self.sequencer,
             self.sequencernames,
             finalhash,
-            self.properties,
+            # savez stores a dict as a 0-d object array anyway; explicit for mypy.
+            np.asarray(self.properties, dtype=object),
             self.flag_channels,
         )
-        logging.info(f"Pulse sequence written to {name}".ljust(65, ".") + "[done]")
+        logger.info(f"Pulse sequence written to {name}".ljust(65, ".") + "[done]")
 
 
 class PulseBlasterSequence:
+    """
+    Turn a pulse sequence YAML file into PulseBlaster instructions.
+
+    Call :meth:`parse_pulse_sequence_file`, then :meth:`compile`.
+
+    :param channel_mapping: Channel name → PulseBlaster output bit.
+    :param yaml_file: Pulse sequence file; default
+        ``<sequence dir>/sequence_0.yaml``.
+    """
+
     def __init__(
-        self,
-        channel_mapping: Dict[str, Any],
-        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
+        self, channel_mapping: dict[str, int], yaml_file: Path | None = None
     ) -> None:
-        self.event_times: List[float] = []
-        self.event_durations: List[float] = []
-        self.event_channel: List[str] = []
-        self.events: List[str] = []
-        self.channel_bits: List[int] = []
-        self.segment_durations: List[float] = []
+        self.event_times: list[float] = []
+        self.event_durations: list[float] = []
+        self.event_channel: list[str] = []
+        self.events: list[str] = []
+        self.channel_bits: list[int] = []
+        self.segment_durations: list[float] = []
         self.channel_mapping = channel_mapping
-        self.ps: Dict[str, Any] = {}
-        self.yaml_sequence: Dict[str, Any] = self._load_yaml_sequence(yaml_file)
+        self.ps: dict[str, Any] = {}
+        tmp_yaml_file = (
+            yaml_file if yaml_file is not None else get_seq_dir() / "sequence_0.yaml"
+        )
+        self.yaml_sequence: dict[str, Any] = self._load_yaml_sequence(tmp_yaml_file)
         self.total_duration = self.yaml_sequence["total_duration"]
 
-    def _load_yaml_sequence(self, path: Path) -> Dict[str, Any]:
+    def _load_yaml_sequence(self, path: Path) -> dict[str, Any]:
         with open(path, "r", encoding="utf-8") as file:
-            yaml_sequence = yaml.safe_load(file)
+            yaml_sequence: dict[str, Any] = yaml.safe_load(file)
         return yaml_sequence
 
     def parse_pulse_sequence_file(self) -> None:
+        """
+        Compute the segments of every block: sorted switching events, the
+        durations between them and the channel bit mask of each segment.
+        Zero-length segments (simultaneous edges) are dropped.
+        """
         for block in self.yaml_sequence["sequencing_order"]:
             self._parse_block(self.yaml_sequence[block])
             self._sort_pulses()
@@ -297,10 +374,13 @@ class PulseBlasterSequence:
             }
             self._reset_attributes()
 
-    def compile(self) -> Tuple[List[int], List[float]]:
+    def compile(self) -> tuple[list[int], list[float]]:
         """
-        combines the individual sub seqeunces into one long sequence that
-        can be uploaded to the pulse blaster card in one go.
+        Combine the blocks in ``sequencing_order`` (each repeated
+        ``sequencing_repeats`` times) into one sequence that can be uploaded
+        to the PulseBlaster card in one go.
+
+        :return: ``(channel_bit_masks, durations_us)``, one entry per segment.
         """
         channel_bits = []
         bits_duration = []
@@ -322,7 +402,7 @@ class PulseBlasterSequence:
         self.channel_bits = []
         self.segment_durations = []
 
-    def _append_event(self, channel: str, pulse: Dict[str, float]) -> None:
+    def _append_event(self, channel: str, pulse: dict[str, float]) -> None:
         self.event_times.append(pulse["start"])
         self.event_times.append(pulse["start"] + pulse["duration"])
         self.event_channel.append(channel)
@@ -330,18 +410,21 @@ class PulseBlasterSequence:
         self.events.append("up")
         self.events.append("down")
 
-    def _parse_channel(self, channel: str, channel_pulses: Dict[str, Any]) -> None:
+    def _parse_channel(self, channel: str, channel_pulses: dict[str, Any]) -> None:
         for pulse in channel_pulses.values():
             self._append_event(channel, pulse)
 
-    def _parse_block(self, ps_block: Dict[str, Any]) -> None:
+    def _parse_block(self, ps_block: dict[str, Any]) -> None:
         for channel, channel_pulses in ps_block.items():
             self._parse_channel(channel, channel_pulses)
 
     def _sort_pulses(self) -> None:
-        self.event_times, self.event_channel, self.events = zip(
+        times, channels, events = zip(
             *sorted(zip(self.event_times, self.event_channel, self.events))
         )
+        self.event_times = list(times)
+        self.event_channel = list(channels)
+        self.events = list(events)
 
     def _get_event_durations(self) -> None:
         self.event_durations = [
@@ -370,14 +453,16 @@ class PulseBlasterSequence:
         if self.event_times[0] != 0:
             self.channel_bits.insert(0, 0)
             self.event_durations.insert(0, self.event_times[0])
-        self._pop_uncessary_entries()
+        self._pop_unnecessary_entries()
 
-    def _pop_uncessary_entries(self) -> None:
+    def _pop_unnecessary_entries(self) -> None:
+        """Remove zero-length segments (several channels switching at once)."""
         indices_to_pop = [
             index
             for index, duration in enumerate(self.event_durations)
             if duration == 0
         ]
-        for pop_index in indices_to_pop:
+        # Pop from the back so the remaining indices stay valid.
+        for pop_index in reversed(indices_to_pop):
             self.event_durations.pop(pop_index)
             self.channel_bits.pop(pop_index)

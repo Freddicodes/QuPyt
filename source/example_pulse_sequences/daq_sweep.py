@@ -1,7 +1,6 @@
 
-import logging
-import math
 import numpy as np
+
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
 

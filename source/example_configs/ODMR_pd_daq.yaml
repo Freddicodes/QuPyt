@@ -79,7 +79,7 @@ data:
   dynamic_steps: *n_dynamic_steps
   reference_channels: 2
 
-ps_path: '.\QuPyt\source\example_pulse_sequences\odmr_pd_daq.py'
+ps_path: './source/example_pulse_sequences/odmr_pd_daq.py'
 pulse_sequence:
   mw_duration: 10
   laser_duration: 50

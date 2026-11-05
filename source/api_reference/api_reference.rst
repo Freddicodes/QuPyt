@@ -10,7 +10,9 @@ Here you will find documentation on how to use the different classes.
 
    sensors
    synchronisers
-   visa_handler
-   signal_sources
+   devices
    device_handler
-   power_supplies
+   visa_handler
+   measurement
+   pulse_sequences
+   workspace

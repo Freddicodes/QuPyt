@@ -1,19 +1,56 @@
 import logging
-from typing import Dict, Any, List
+from pathlib import Path
+from typing import Any
+
 import numpy as np
-from qupyt.hardware.sensors import Sensor
+from numpy.typing import DTypeLike
+
+from qupyt.hardware.sensor import Sensor
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
 
+logger = logging.getLogger(__name__)
 
 class Data(ConfigurationMixin):
+    """
+    Container for the measurement data of one measurement.
+
+    The array has the shape
+    ``(reference_channels, ps_steps, dynamic_steps, M, *roi_shape)``:
+    the sensor's measurements are split round-robin over the reference
+    channels (measurement ``k`` belongs to channel ``k % reference_channels``),
+    and every average is **added** (see :meth:`update_data`). ``M`` is 1 in
+    ``"sum"`` mode and ``number_measurements / reference_channels`` in
+    ``"spread"`` mode.
+
+    Call order: :meth:`set_dims_from_sensor`, :meth:`create_array`, then
+    :meth:`update_data` per acquisition and finally :meth:`save`.
+
+    :param configuration: Configuration keys:
+
+        - ``dynamic_steps`` (int, >= 1, required): number of dynamic steps.
+        - ``averaging_mode`` (``"sum"`` or ``"spread"``, required):
+          ``"sum"`` adds all measurements of a channel, ``"spread"`` keeps
+          them separately.
+        - ``ps_steps`` (int, default 1): number of pulse sequence steps.
+        - ``reference_channels`` (int, default 2).
+        - ``live_compression`` (bool, default False): average over the ROI
+          on the fly, so only one value per measurement is kept.
+        - ``compress``: deprecated alias of ``live_compression``.
+        - ``save_in_chunks`` (int, default 0): additionally save the data
+          every N averages to a separate chunk file (0: off).
+        - ``number_measurements``, ``roi_shape``: normally taken from the
+          sensor by :meth:`set_dims_from_sensor`.
+    :type configuration: dict
+    """
+
     attribute_map: UpdateConfigurationType
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    def __init__(self, configuration: dict[str, Any]) -> None:
         self.roi_shape: list[int]
         self.averaging_mode: str
         self.number_dynamic_steps: int
         self.number_measurements: int
-        self.data_type: type
+        self.data_type: DTypeLike
         self.live_compression: bool = False
         self.number_pulse_sequences: int = 1
         self.save_in_chunks: int = 0
@@ -22,6 +59,7 @@ class Data(ConfigurationMixin):
         self.chunk_data: np.ndarray
         self.chunk_save_index: int = 0
         self.filename: tuple[str, str]
+        self.out_dir: Path = Path(".")
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
             "ps_steps": self._set_number_pulse_sequences,
@@ -42,7 +80,10 @@ class Data(ConfigurationMixin):
         self.reference_channels = int(reference_channels)
 
     def _set_compress_mode(self, compression_value: bool) -> None:
-        logging.warning("Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead")
+        logger.warning(
+            "The parameter 'compress' is deprecated; "
+            "use 'live_compression' instead"
+        )
         self.live_compression = compression_value
 
     def _set_live_compression(self, live_compression: bool) -> None:
@@ -66,16 +107,25 @@ class Data(ConfigurationMixin):
     def _set_number_measurements(self, number_measurements: int) -> None:
         self.number_measurements = number_measurements
 
-    def _set_roi_shape(self, roi_shape: List[int]) -> None:
+    def _set_roi_shape(self, roi_shape: list[int]) -> None:
         self.roi_shape = roi_shape
 
     def _set_filename(self, filename: tuple[str, str]) -> None:
         self.filename = filename
 
-    def set_filename(self, filename: tuple[str, str]) -> None:
+    def set_filename(self, filename: tuple[str, str], out_dir: Path | str = ".") -> None:
+        """
+        :param filename: ``(prefix, timestamp)`` used to build chunk file names.
+        :param out_dir: Directory the chunk files are written to.
+        """
         self._set_filename(filename)
+        self.out_dir = Path(out_dir)
 
     def set_dims_from_sensor(self, sensor: Sensor) -> None:
+        """
+        Take ``roi_shape``, ``number_measurements`` and (if the sensor has
+        one) ``target_data_type`` from the sensor.
+        """
         self._set_ROI_from_sensor(sensor)
         self._set_number_measurements_from_sensor(sensor)
         if hasattr(sensor, "target_data_type"):
@@ -88,6 +138,15 @@ class Data(ConfigurationMixin):
         self.number_measurements = sensor.number_measurements
 
     def create_array(self) -> None:
+        """
+        Allocate ``self.data`` (and ``self.chunk_data``) filled with zeros,
+        shape as described in the class docstring. With ``live_compression``
+        the ROI is reduced to one value and the dtype becomes ``float``.
+
+        :raises ValueError: for an unknown ``averaging_mode``, or in
+            ``"spread"`` mode if ``number_measurements`` is not divisible by
+            ``reference_channels``.
+        """
         # HeliCam gets number_images, whereas other get number_images / 2.
         # I suggest fixing this as number_images
         # Specifics have then to be dealt with in each class.
@@ -105,8 +164,11 @@ class Data(ConfigurationMixin):
         elif self.averaging_mode == "spread":
             measurements_per_channel = self.number_measurements / self.reference_channels
             if measurements_per_channel != int(measurements_per_channel):
-                raise ValueError(f"""Your number of measurements {self.number_measurements} is not divisible by the number of channels {self.reference_channels}.
-                Please make sure the number of measurements you want to recored can be distributed accross the reference channels. (I.e. number_measurements is divisible by reference_cannels""")
+                raise ValueError(
+                    f"number_measurements ({self.number_measurements}) must be "
+                    f"divisible by reference_channels ({self.reference_channels}) "
+                    "in averaging_mode 'spread'"
+                )
             data_array_dim = [
                 self.reference_channels,
                 self.number_pulse_sequences,
@@ -115,20 +177,27 @@ class Data(ConfigurationMixin):
                 *self.roi_shape,
             ]
         else:
-            logging.info(
-                f"Failed to crearte dara array for mode {self.averaging_mode}".ljust(
-                    65, "."
-                )
-                + "[failed]"
+            raise ValueError(
+                f"averaging_mode {self.averaging_mode!r} not available; "
+                "use 'sum' or 'spread'"
             )
-            raise ValueError(f"averaging_mode {self.averaging_mode} not available")
-        logging.info(
+        logger.info(
             f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
         )
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
         self.chunk_data = np.zeros_like(self.data)
 
     def update_data(self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int) -> None:
+        """
+        Add one acquisition to the data (and the chunk data, if enabled).
+        Every ``save_in_chunks`` averages the chunk is saved, divided by the
+        chunk size, and reset.
+
+        :param data: Sensor output, first axis = measurements.
+        :param ps_step: Index of the pulse sequence step.
+        :param dynamic_step: Index of the dynamic step.
+        :param avg_step: Index of the current average (counts from 0).
+        """
         if self.live_compression:
             self._update_data_compressed(data, ps_step, dynamic_step)
             if self.save_in_chunks != 0:
@@ -142,7 +211,7 @@ class Data(ConfigurationMixin):
             and (avg_step + 1) % self.save_in_chunks == 0
         ):
             self.save(
-                self.filename[0] + "_ch-" + f"{self.chunk_save_index}_" + self.filename[1],
+                self.out_dir / f"{self.filename[0]}_ch-{self.chunk_save_index}_{self.filename[1]}",
                 source_data=self.chunk_data,
                 average_count=self.save_in_chunks,
             )
@@ -193,20 +262,26 @@ class Data(ConfigurationMixin):
 
     def save(
         self,
-        filename: str,
+        filename: str | Path,
         source_data: np.ndarray | None = None,
         average_count: int | None = None,
     ) -> None:
         """
         Save data (without metadata) to a .npy file.
+
         :param filename: Name of the resulting data file.
          During normal usage as part of QuPyt, this will be assigned by the
          main measurement loop.
-        :type filename: str
+        :type filename: str | Path
+        :param source_data: Array to save instead of ``self.data``.
+        :type source_data: np.ndarray | None
+        :param average_count: If > 0, the data is divided by it before saving
+         (``self.data`` sums the averages). ``None`` or 0 saves the raw sum.
+        :type average_count: int | None
         """
         if source_data is None:
             source_data = self.data
         if average_count is not None and average_count > 0:
             np.save(filename, source_data / average_count)
-            return None
+            return
         np.save(filename, source_data)

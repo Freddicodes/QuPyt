@@ -19,7 +19,13 @@ release = "0.1.0"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.inheritance_diagram"]
+# napoleon: many docstrings use Google/numpy sections ("Args:", "Raises:",
+# "Parameters\n----------"); reST ":param:" docstrings are unaffected.
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.inheritance_diagram",
+    "sphinx.ext.napoleon",
+]
 autodoc_member_order = "bysource"
 
 templates_path = ["_templates"]

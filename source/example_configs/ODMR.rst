@@ -1,8 +1,12 @@
-.. _odmr:
+.. _odmr_cam:
 
-ODMR Configuration File
-=======================
+ODMR Camera Configuration File
+==============================
 
-Below you find an example Configuration file for an ESR measurement:
+Below you find an example configuration file for an ODMR measurement with a camera
+(``MockCam`` and ``MockSynchroniser``, so it runs without hardware):
 
-.. literalinclude:: ODMR.yaml
+.. literalinclude:: ODMR_cam.yaml
+   :language: yaml
+
+The matching pulse sequence file is shown in :ref:`odmr_cam_ps`.

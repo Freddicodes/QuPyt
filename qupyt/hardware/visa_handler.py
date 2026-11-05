@@ -1,152 +1,78 @@
 """
-Create one Class to handle all connections through the VISA library.
-For different microwave sources or visa devices, the commands to set e.g.
-an output power are unified by storing the device speicif commands in a
-dictionary for each device.
+Connection handling for all devices that communicate via the VISA library.
+
+:class:`VisaObject` opens and closes the VISA resource and waits for
+operation complete (OPC). It does not know any device types: each device
+class declares its own command set in the ``COMMANDS`` class attribute
+(e.g. ``"SetFreq1": "FREQ "``). The default command set only contains
+``"OPC"``.
 """
 
-from time import sleep
 import logging
-from typing import Dict
-import pyvisa
-from qupyt.mixins import ConfigurationError
+from time import sleep
+from typing import ClassVar
 
+import pyvisa
+from pyvisa.resources import MessageBasedResource
+
+logger = logging.getLogger(__name__)
 
 class VisaObject:
     """
-    Visa class acting as parent for all devices intended
-    to connect via the VISA protocol.
+    Parent class for all devices that connect via the VISA protocol.
+
+    Subclasses override ``COMMANDS`` with their device-specific command set;
+    it is available on the instance as ``self.command``.
     """
+
+    COMMANDS: ClassVar[dict[str, str]] = {"OPC": "*OPC?"}
 
     def __init__(self, handle: str, s_type: str) -> None:
         """
-        handle: visa adress of signal source
-        s_type: source type (SRS, RS)...
+        handle: VISA address of the device, e.g. "TCPIP::1.2.3.4::INSTR"
+        s_type: registered device type (e.g. "SRS", "SMB"), used in log messages
         """
-        self.known_s_types = ["SRS", "SMA", "SMB", "Rigol", "TekAWG", "TekAFG"]
         self.handle = handle
         self.s_type = s_type
-        if self.s_type not in self.known_s_types:
-            raise ConfigurationError(
-                "the VISA device type", self.s_type, self.known_s_types
-            )
-        self.command: Dict[str, str]
-        self._get_instructions()
+        self.command = self.COMMANDS
+        resource_manager = pyvisa.ResourceManager()
+
         try:
-            resource_manager = pyvisa.ResourceManager()
-            self.instance = resource_manager.open_resource(handle)
-            self.instance.timeout = 60000
-            logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[done]"
-            )
-        except Exception as exc:
-            logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[failed]"
-            )
+            resource = resource_manager.open_resource(handle)
+        except Exception as e:
             resource_manager.close()
             resource_manager.visalib._registry.clear()
-            raise exc
+            raise ConnectionError(
+                f"Could not open {s_type} at VISA address {handle}"
+            ) from e
+        # open_resource() is typed as returning Resource; QuPyt needs
+        # write/query, which only message-based resources (INSTR, SOCKET, ...)
+        # have. pyvisa still picks the concrete class (e.g. TCPIPInstrument).
+        if not isinstance(resource, MessageBasedResource):
+            resource.close()
+            resource_manager.close()
+            raise TypeError(
+                f"{s_type} at VISA address {handle} is not a message-based "
+                f"resource (got {type(resource).__name__})"
+            )
+        self.instance: MessageBasedResource = resource
+        self.instance.timeout = 60000
+
+        logger.info(f"Opening {s_type} at address {handle}".ljust(65, ".") + "[done]")
 
     def __repr__(self) -> str:
-        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
+        return f"{type(self).__name__}(handle: {self.handle}, s_type: {self.s_type})"
 
     def __str__(self) -> str:
-        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
-
-    def _get_instructions(self) -> None:
-        """
-        Get set of instructions depending
-        on type of signal source.
-        """
-        if self.s_type == "SRS":
-            self.command = {
-                "SetAmpl1": "AMPR ",
-                "GetAmpl1": "AMPR?",
-                "SetFreq1": "FREQ ",
-                "GetFreq1": "FREQ?",
-                "OPC": "*OPC?",
-            }
-
-        elif self.s_type == "SMB":
-            self.command = {
-                "SetAmpl1": "POW ",
-                "GetAmpl1": "POW?",
-                "SetFreq1": "FREQ ",
-                "GetFreq1": "FREQ?",
-                "OPC": "*OPC?",
-            }
-
-        elif self.s_type == "SMA":
-            self.command = {
-                "SetAmpl1": "POW ",
-                "GetAmpl1": "POW?",
-                "SetFreq1": "FREQ ",
-                "GetFreq1": "FREQ?",
-                "OPC": "*OPC?",
-            }
-
-        elif self.s_type == "Rigol":
-            self.command = {
-                "OPC": "*OPC?",
-                "GetAmpl1": "VOLT?",
-                "SetAmpl1": "VOLT ",
-                "SetPhase1": "BURS:PHAS ",
-                "GetPhase1": "BURS:PHAS?",
-                "GetFreq1": "FREQ?",
-                "SetFreq1": "FREQ ",
-                "GetBurstNCycles1": "BURS:NCYC?",
-                "SetBurstNCycles1": "BURS:NCYC ",
-                "SetBurstMode1": "BURS:MODE ",
-                "SetBurstState1": "BURS:STAT ",
-                "SetBurstPhase1": ":SOUR1:BURSt:PHASe ",
-                "GetBurstMode1": "BURS:MODE?",
-                "Outp1": "OUTP ",
-                "GetOutp1": "OUTP?",
-                "GetAmpl2": "SOUR2:VOLT?",
-                "SetAmpl2": "SOUR2:VOLT ",
-                "SetPhase2": "SOUR2:BURS:PHAS ",
-                "GetPhase2": "SOUR2:BURS:PHAS?",
-                "GetFreq2": "SOUR2:FREQ?",
-                "SetFreq2": "SOUR2:FREQ ",
-                "GetBurstNCycles2": "SOUR2:BURS:NCYC?",
-                "SetBurstNCycles2": "SOUR2:BURS:NCYC ",
-                "SetBurstMode2": "SOUR2:BURS:MODE ",
-                "SetBurstState2": "SOUR2:BURS:STAT ",
-                "SetBurstPhase2": ":SOUR2:BURSt:PHASe ",
-                "GetBurstMode2": "SOUR2:BURS:MODE?",
-                "Outp2": "OUTP2 ",
-                "GetOutp2": "OUTP2?",
-            }
-
-        elif self.s_type == "TekAWG":
-            self.command = {"OPC": "*OPC?"}
-
-        elif self.s_type == "TekAFG":
-            self.command = {
-                "SetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude ",
-                "GetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude?",
-                "SetFreq1": "SOURce1:FREQuency:FIXed ",
-                "GetFreq1": "SOURce1:FREQuency:FIXed?",
-                "SetPhase1": "SOURce1:PHASe:ADJust ",
-                "SetBurstMode1": "SOURce1:BURSt:MODE ",
-                "SetBurstState1": "SOURce1:BURSt:STATe ",
-                "SetAmpl2": "SOURce2:VOLTage:LEVel:IMMediate:AMPLitude ",
-                "SetFreq2": "SOURce2:FREQuency:FIXed ",
-                "SetPhase2": "SOURce2:PHASe:ADJust ",
-                # The Tek AFG does not implement an OPC.
-                # We therefore skip the waiting time and
-                # Query impedance which will alwasy return
-                # Non zeros numbers.
-                "OPC": "OUTPut1:IMPedance?",
-            }
+        return f"{type(self).__name__}(handle: {self.handle}, s_type: {self.s_type})"
 
     def opc_wait(self) -> None:
         """
-        Check if the device has finished all tasks and is
-        ready to execute the next command.
-        Pauses execution until the device is ready.
+        Wait until the device reports operation complete: query the
+        ``"OPC"`` command up to 3 times, 0.1 s apart, until it returns a
+        non-zero number.
+
+        :raises TimeoutError: if no valid non-zero response arrives.
         """
         last_response = ""
         for attempt in range(3):
@@ -156,7 +82,7 @@ class VisaObject:
                 if float(opc.strip()) != 0:
                     return
             except ValueError:
-                logging.warning(
+                logger.warning(
                     f"{self.s_type} returned invalid OPC response {opc!r}; "
                     f"retrying ({attempt + 1}/3)"
                 )
@@ -167,19 +93,15 @@ class VisaObject:
         )
 
     def close(self) -> None:
-        if self.s_type == "TekAWG":
-            print("Sleeping for 5 seconds in close to prevent TCPIP issues:")
-            sleep(5)
+        """
+        Close the VISA resource and clear pyvisa's resource registry.
+        Errors are logged, not raised, so closing never fails a measurement.
+        """
         try:
             self.instance.close()
             self.instance.visalib._registry.clear()
-            logging.info(
-                f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
-                + "[done]"
-            )
+            logger.info(f"Closing {self.s_type} at address {self.handle}".ljust(65, ".") + "[done]")
         except Exception:
-            logging.exception(
-                "Closing {self.s_type} at adress {self.handle} failed".ljust(
-                    65, ".")
-                + "[failed]"
+            logger.exception(
+                f"Closing {self.s_type} at address {self.handle} failed".ljust(65, ".") + "[failed]"
             )

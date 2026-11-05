@@ -27,3 +27,5 @@ qupyt.egg-info/
 sample_yamls/
 # Ignore auto-generated version file
 qupyt/_version.py
+venv/
+TODO.md

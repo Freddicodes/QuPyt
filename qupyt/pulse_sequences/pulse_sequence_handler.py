@@ -1,15 +1,17 @@
 """
-This file handles the use of different synchronisers.
-By reading the parameters passed through the instructions file
+Run the user's pulse sequence script and merge its results into the
+measurement parameters.
+
+The measurement YAML names a Python file (``ps_path``) that defines
+``generate_sequence(params)``. :func:`write_user_ps` imports and calls it
+(it writes the ``sequence_<n>.yaml`` files); the dict it may return is
+merged into the measurement parameters with :func:`update_params_dict`.
 """
 
 import importlib.util
-from types import ModuleType
 from pathlib import Path
-from typing import Dict, Any, Optional, Protocol, cast
-import yaml
-
-from qupyt.set_up import get_seq_dir
+from types import ModuleType
+from typing import Any, Protocol, cast
 
 
 # pylint: disable=too-few-public-methods
@@ -20,7 +22,7 @@ class UserPulseSeqProtocol(Protocol):
     None or another dict.
     """
 
-    def generate_sequence(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def generate_sequence(self, params: dict[str, Any]) -> dict[str, Any] | None:
         """
         :param params: Input to pass the parameters needed
          to constuct the pulse sequence.
@@ -44,32 +46,40 @@ def _load_module_from_path(path: Path) -> ModuleType:
     return module
 
 
-def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def write_user_ps(path: Path, params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
+
+    :param path: Python file defining ``generate_sequence(params)``
+        (``ps_path`` in the measurement YAML).
+    :type path: Path
+    :param params: The ``pulse_sequence`` section of the measurement YAML.
+    :type params: dict[str, Any]
+    :return: What ``generate_sequence`` returns: parameters to merge into
+        the measurement parameters, or ``None``.
+    :rtype: dict[str, Any] | None
+    :raises FileNotFoundError: if the file does not exist.
+    :raises ImportError: if the file cannot be loaded as a module.
     """
-    sequence_dir = get_seq_dir()
-    previous_sequence_files = {
-        sequence_file: sequence_file.stat().st_mtime_ns
-        for sequence_file in sequence_dir.glob("sequence_*.yaml")
-    }
     user_ps = cast(UserPulseSeqProtocol, _load_module_from_path(path))
     dependent_parameters = user_ps.generate_sequence(params)
     return dependent_parameters
 
 
 def update_params_dict(
-    params: Dict[str, Any], update_params: Optional[Dict[str, Any]]
-) -> Dict[str, Any]:
+    params: dict[str, Any], update_params: dict[str, Any] | None
+) -> dict[str, Any]:
     """
-    Update the parameters dictonary. This is done via recursion to reach
+    Update the parameters dictionary. This is done via recursion to reach
     nested parameter dicts without overwriting the full config.
 
-    :param params: Full configuration dictionary to be updated.
-    :type param: Dict[str, Any]
-    :param update_params: Dictionary with the values to be updated.
-    :type update_params: Dict[str, Any]
+    :param params: Full configuration dictionary to be updated (in place).
+    :type params: dict[str, Any]
+    :param update_params: Dictionary with the values to be updated, or ``None``.
+    :type update_params: dict[str, Any] | None
+    :return: ``params`` (the same object), updated.
+    :rtype: dict[str, Any]
     """
     if update_params is None:
         return params

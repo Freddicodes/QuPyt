@@ -7,14 +7,14 @@ name = 'qupyt'
 #version = '0.1.0'
 dynamic = ["version"]
 description = 'Provide a framework for quantum sensing experiments'
-license = {text = 'No license of for commercial or non-commercial use is granted'}
+license = {text = 'No license for commercial or non-commercial use is granted'}
+requires-python = ">=3.14"
 dependencies = [
     'numpy', 
     'PyYAML',
-    'pydantic',
-    'watchdog',
+    'pydantic>=2.12',
+    'watchdog>=4',
     'tqdm',
-    'termcolor',
     'pyserial',
     'PyVISA',
     'pyvisa-py'
@@ -35,6 +35,8 @@ pulsestreamer   = ['pulsestreamer']
 windfreak       = ['windfreak']
 plot            = ['matplotlib']
 all             = ["qupyt[basler,genicam,daq,pulsestreamer,windfreak,plot]"]
+doc             = ['sphinx', 'graphviz'] 
+dev             = ['pytest', 'mypy']
 
 [tool.setuptools.packages.find]
 include = ["qupyt*"]
@@ -46,6 +48,9 @@ write_to = "qupyt/_version.py"
 
 [project.scripts]
 qupyt = "qupyt.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.mypy]
 check_untyped_defs = true
@@ -69,11 +74,24 @@ show_column_numbers = true
 # disallow_any_expr = true
 # disallow_any_explicit = true
 strict = true
-enable_recursive_aliases = true
 follow_imports = 'normal'
 strict_optional = true
 # mypy_path = ['qupyt']
 files = ['qupyt']
+python_version= "3.14"
+
+[tool.pylint.main]
+py-version = "3.14"
+
+[tool.pylint."messages control"]
+# Replaces the per-file "# pylint: disable=..." headers that were removed.
+disable = [
+    "line-too-long",
+    "logging-fstring-interpolation",
+    "logging-not-lazy",
+    "too-few-public-methods",
+]
+enable = ["logging-format-interpolation"]
 
 [tool.pylsp]
 configurationSources = ["pyproject.toml"]
@@ -84,3 +102,14 @@ args = [
     "--disable=line-too-long,logging-fstring-interpolation",
     "--enable=logging-format-interpolation",
 ]
+
+[[tool.mypy.overrides]]
+module = ["egrabber", "libHeLIC", "pypylon.*", "harvesters.*", "nidaqmx.*"]
+ignore_missing_imports = true
+
+# Vendor-derived ctypes bindings (SpinCore SpinAPI). `exclude` alone is not
+# enough: pulseblaster.py imports the module, so mypy would still follow it.
+[[tool.mypy.overrides]]
+module = ["qupyt.hardware.wrappers.*"]
+ignore_errors = true
+

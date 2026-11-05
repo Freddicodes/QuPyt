@@ -1,8 +1,11 @@
-.. _odmr_ps:
+.. _odmr_cam_ps:
 
-ODMR PS File
-============
+ODMR Camera Pulse Sequence File
+===============================
 
-Below you find an example PS file for an ODMR measurement:
+Below you find an example pulse sequence file for an ODMR measurement with a camera:
 
-.. literalinclude:: odmr.py
+.. literalinclude:: odmr_cam.py
+   :language: python
+
+It is used by the configuration file in :ref:`odmr_cam`.

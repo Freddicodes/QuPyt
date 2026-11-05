@@ -6,6 +6,7 @@ of the hardware used.
 """
 
 import logging
+
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
 

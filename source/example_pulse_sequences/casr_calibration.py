@@ -1,6 +1,9 @@
-import numpy as np
 import logging
-from qupyt.pulse_sequences.yaml_sequence import YamlSequence, ComplexSequence
+
+import numpy as np
+
+from qupyt.pulse_sequences.yaml_sequence import ComplexSequence, YamlSequence
+
 
 def check_valid_pulse_durations(pulse_durations, sampling_rate, tol=1e-12):
 
