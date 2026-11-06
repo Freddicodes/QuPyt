@@ -76,6 +76,9 @@ def test_string_argument_becomes_path(tmp_path: Path) -> None:
 
 def test_tilde_is_expanded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))  # expanduser reads HOME on every call
+    monkeypatch.setenv(
+        "USERPROFILE", str(tmp_path)
+    )  # expanduser reads HOME on every call
     assert QuPytConfig("~/ws").input_dir == tmp_path / "ws"
 
 
