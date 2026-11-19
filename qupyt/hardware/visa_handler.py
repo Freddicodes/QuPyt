@@ -5,11 +5,14 @@ an output power are unified by storing the device speicif commands in a
 dictionary for each device.
 """
 
-from time import sleep
 import logging
-from typing import Dict
+from time import sleep
+
 import pyvisa
-from qupyt.mixins import ConfigurationError
+
+from qupyt.exceptions import ConfigurationError
+
+logger = logging.getLogger(__name__)
 
 
 class VisaObject:
@@ -30,24 +33,22 @@ class VisaObject:
             raise ConfigurationError(
                 "the VISA device type", self.s_type, self.known_s_types
             )
-        self.command: Dict[str, str]
+        self.command: dict[str, str]
         self._get_instructions()
         try:
             resource_manager = pyvisa.ResourceManager()
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
-            logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[done]"
+            logger.info(
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
             )
-        except Exception as exc:
-            logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[failed]"
+        except Exception:
+            logger.exception(
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
             )
             resource_manager.close()
             resource_manager.visalib._registry.clear()
-            raise exc
+            raise
 
     def __repr__(self) -> str:
         return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
@@ -156,7 +157,7 @@ class VisaObject:
                 if float(opc.strip()) != 0:
                     return
             except ValueError:
-                logging.warning(
+                logger.warning(
                     f"{self.s_type} returned invalid OPC response {opc!r}; "
                     f"retrying ({attempt + 1}/3)"
                 )
@@ -173,13 +174,12 @@ class VisaObject:
         try:
             self.instance.close()
             self.instance.visalib._registry.clear()
-            logging.info(
+            logger.info(
                 f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
                 + "[done]"
             )
         except Exception:
-            logging.exception(
-                "Closing {self.s_type} at adress {self.handle} failed".ljust(
-                    65, ".")
+            logger.exception(
+                "Closing {self.s_type} at adress {self.handle} failed".ljust(65, ".")
                 + "[failed]"
             )

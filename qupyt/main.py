@@ -1,39 +1,39 @@
-# pylint: disable=logging-format-interpolation
-# pylint: disable=logging-not-lazy
 """
 Main programm. Measurement loop is started from here.
 """
+
 import argparse
 import logging
-import threading
-import traceback
 import os
 import platform
+import threading
 import time
+import traceback
 from datetime import date
-from time import sleep
-from queue import Queue, Empty
-from typing import Optional
 from pathlib import Path
+from queue import Empty, Queue
+from time import sleep
+from typing import Optional
 
 import yaml
-from watchdog.observers import Observer
 from watchdog.events import (
-    PatternMatchingEventHandler,
-    FileModifiedEvent,
     FileClosedEvent,
+    FileModifiedEvent,
+    PatternMatchingEventHandler,
 )
+from watchdog.observers import Observer
 
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
-from qupyt.pulse_sequences.pulse_sequence_handler import (
-    write_user_ps,
-    update_params_dict,
-)
-from qupyt.hardware.synchronisers import SynchroniserFactory
-from qupyt.hardware.sensors import SensorFactory
+from qupyt.hardware.sensor.base import Sensor
+from qupyt.hardware.synchroniser.base import Synchroniser
 from qupyt.measurement_logic.run_measurement import run_measurement
-from qupyt.hardware.signal_sources import SignalSource
-from qupyt.set_up import get_waiting_room, make_userdirs, get_log_dir, get_home_dir
+from qupyt.pulse_sequences.pulse_sequence_handler import (
+    update_params_dict,
+    write_user_ps,
+)
+from qupyt.set_up import get_home_dir, get_log_dir, get_waiting_room, make_userdirs
+
+logger = logging.getLogger(__name__)
 
 qupyt_logo_text = """                                                                                                        
                                                                                                          
@@ -67,21 +67,21 @@ print(qupyt_logo_text)
 make_userdirs()
 parser = argparse.ArgumentParser(description="Start QuPyt measurement")
 parser.add_argument(
-    "--verbose", action="store_true", help="deactivate logging output to screen"
+    "--verbose", action="store_true", help="deactivate logger output to screen"
 )
 args = parser.parse_args()
 
 logfile = get_log_dir() / f"log_{date.today()}.log"
-handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
+handlers: list[logger.Handler] = [logger.FileHandler(logfile)]
 if args.verbose:
-    handlers.append(logging.StreamHandler())
-logging.basicConfig(
+    handlers.append(logger.StreamHandler())
+logger.basicConfig(
     handlers=handlers,
     # filename='logfile.log',
     format="%(levelname)s\t%(asctime)s %(message)s",
     datefmt="%Y/%m/%d %I:%M:%S %p",
     encoding="utf-8",
-    level=logging.INFO,
+    level=logger.INFO,
     force=True,
 )
 
@@ -129,7 +129,7 @@ def parse_input() -> None:
                 continue  # already processed this instance
             processed_files.add(file_key)
 
-            logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
+            logger.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
 
             # Retry reading the file in case it's still being written
             for attempt in range(3):
@@ -156,14 +156,12 @@ def parse_input() -> None:
             update_params_dict(params, parameter_update)
 
             # Create measurement objects
-            synchroniser = SynchroniserFactory.create_synchroniser(
+            synchroniser = Synchroniser.create(
                 params["synchroniser"]["type"],
                 params["synchroniser"]["config"],
                 params["synchroniser"]["channel_mapping"],
             )
-            sensor = SensorFactory.create_sensor(
-                params["sensor"]["type"], params["sensor"]["config"]
-            )
+            sensor = Sensor.create(params["sensor"]["type"], params["sensor"]["config"])
 
             # Update devices
             static_devices.update_devices(params["static_devices"])
@@ -188,7 +186,7 @@ def parse_input() -> None:
             processed_files.discard(file_key)
 
         except Exception:
-            logging.exception("Excpetion in main measurement loop")
+            logger.exception("Excpetion in main measurement loop")
             traceback.print_exc()
 
 
@@ -202,16 +200,16 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
     - On other systems, it handles file closures.
 
     Attributes:
-        patterns (list): List of file patterns to include in monitoring.
-        ignore_patterns (list): List of file patterns to exclude from monitoring.
+        patterns (list): list of file patterns to include in monitoring.
+        ignore_patterns (list): list of file patterns to exclude from monitoring.
         ignore_directories (bool): Whether to ignore changes in directories.
         case_sensitive (bool): Whether file pattern matching is case sensitive.
     """
 
     def __init__(
         self,
-        patterns: Optional[list[str]] = None,
-        ignore_patterns: Optional[list[str]] = None,
+        patterns: list[str] | None = None,
+        ignore_patterns: list[str] | None = None,
         ignore_directories: bool = False,
         case_sensitive: bool = False,
     ):
@@ -219,8 +217,8 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         Initialize the event handler with the specified parameters.
 
         Args:
-            patterns (list, optional): List of file patterns to include in monitoring.
-            ignore_patterns (list, optional): List of file patterns to exclude from monitoring.
+            patterns (list, optional): list of file patterns to include in monitoring.
+            ignore_patterns (list, optional): list of file patterns to exclude from monitoring.
             ignore_directories (bool, optional): Whether to ignore changes in directories. Defaults to False.
             case_sensitive (bool, optional): Whether file pattern matching is case sensitive. Defaults to False.
         """
@@ -316,7 +314,7 @@ def main() -> None:
     """
     Start the main measurement loop.
     """
-    logging.info("Started Program")
+    logger.info("Started Program")
     global event_thread
     event_thread = threading.Event()
     global queue

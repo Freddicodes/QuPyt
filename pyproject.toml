@@ -76,3 +76,6 @@ args = ["--disable=line-too-long",
 "--enable=logging-format-interpolation",
 "--disable=logging-fstring-interpolation"]
 # disable = ["logging-format-interpolation", "logging-not-lazy"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

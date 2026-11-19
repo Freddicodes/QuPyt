@@ -2,20 +2,20 @@
 Main measurement loop.
 """
 
-import logging
-from time import sleep
-from datetime import datetime
-from typing import Dict, Any
 import gc
+import logging
+from datetime import datetime
+from time import sleep
+from typing import Any
 
 import yaml
+from qupyt._version import __version__ as qupyt_version
 from tqdm import tqdm
 
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
+from qupyt.hardware.sensor import Sensor
+from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.measurement_logic.data_handling import Data
-from qupyt.hardware.synchronisers import Synchroniser
-from qupyt.hardware.sensors import Sensor
-from qupyt._version import __version__ as qupyt_version
 from qupyt.set_up import get_seq_dir
 
 
@@ -30,12 +30,13 @@ def _as_bool(value: Any) -> bool:
             return False
     return bool(value)
 
+
 def run_measurement(
     static_devices: DeviceHandler,
     dynamic_devices: DynamicDeviceHandler,
     sensor: Sensor,
     synchroniser: Synchroniser,
-    params: Dict[str, Any],
+    params: dict[str, Any],
 ) -> str:
     static_devices.set_all_params()
     iterator_size = int(params.get("dynamic_steps", 1))
@@ -50,28 +51,34 @@ def run_measurement(
         data_container.set_dims_from_sensor(sensor)
         data_container.create_array()
         params["filename"] = params["experiment_type"] + "_" + mid
-        data_container.set_filename((params["experiment_type"],mid))
+        data_container.set_filename((params["experiment_type"], mid))
 
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             synchroniser.open()
             synchroniser.stop()
             if upload_to_synchroniser:
-                synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
+                synchroniser.load_sequence(
+                    get_seq_dir() / f"sequence_{ps_itervalue}.yaml"
+                )
             else:
-                logging.info("Skipped synchroniser sequence upload".ljust(65, ".") + "[done]")
+                logging.info(
+                    "Skipped synchroniser sequence upload".ljust(65, ".") + "[done]"
+                )
             synchroniser.run()
             sleep(0.1)
             sensor.open()
             sleep(0.1)
-            for itervalue in tqdm(range(iterator_size), leave=(ps_itervalue == ps_iterator_size - 1)):
+            for itervalue in tqdm(
+                range(iterator_size), leave=(ps_itervalue == ps_iterator_size - 1)
+            ):
                 dynamic_devices.next_dynamic_step()
                 if has_dynamic_devices:
                     sleep(0.1)
                 for avg in tqdm(
-                        range(int(params["averages"])),
-                        leave=(itervalue == (iterator_size - 1)) and (ps_itervalue == (ps_iterator_size - 1)),
+                    range(int(params["averages"])),
+                    leave=(itervalue == (iterator_size - 1))
+                    and (ps_itervalue == (ps_iterator_size - 1)),
                 ):
-
                     sleep(float(params.get("sleep", 0)))
                     data = sensor.acquire_data(synchroniser)
                     data_container.update_data(data, ps_itervalue, itervalue, avg)
@@ -88,7 +95,9 @@ def run_measurement(
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
         if return_status == "success":
-            data_container.save(params["filename"], average_count=int(params["averages"]))
+            data_container.save(
+                params["filename"], average_count=int(params["averages"])
+            )
         else:
             data_container.save(params["filename"])
         with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:

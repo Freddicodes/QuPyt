@@ -4,10 +4,9 @@ By reading the parameters passed through the instructions file
 """
 
 import importlib.util
-from types import ModuleType
 from pathlib import Path
-from typing import Dict, Any, Optional, Protocol, cast
-import yaml
+from types import ModuleType
+from typing import Any, Optional, Protocol, cast
 
 from qupyt.set_up import get_seq_dir
 
@@ -20,7 +19,7 @@ class UserPulseSeqProtocol(Protocol):
     None or another dict.
     """
 
-    def generate_sequence(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def generate_sequence(self, params: dict[str, Any]) -> dict[str | Any] | None:
         """
         :param params: Input to pass the parameters needed
          to constuct the pulse sequence.
@@ -44,7 +43,7 @@ def _load_module_from_path(path: Path) -> ModuleType:
     return module
 
 
-def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def write_user_ps(path: Path, params: dict[str, Any]) -> Optional[dict[str, Any]]:
     """
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
@@ -60,16 +59,16 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
 
 
 def update_params_dict(
-    params: Dict[str, Any], update_params: Optional[Dict[str, Any]]
-) -> Dict[str, Any]:
+    params: dict[str, Any], update_params: Optional[dict[str, Any]]
+) -> dict[str, Any]:
     """
     Update the parameters dictonary. This is done via recursion to reach
     nested parameter dicts without overwriting the full config.
 
     :param params: Full configuration dictionary to be updated.
-    :type param: Dict[str, Any]
-    :param update_params: Dictionary with the values to be updated.
-    :type update_params: Dict[str, Any]
+    :type param: dict[str, Any]
+    :param update_params: dictionary with the values to be updated.
+    :type update_params: dict[str, Any]
     """
     if update_params is None:
         return params

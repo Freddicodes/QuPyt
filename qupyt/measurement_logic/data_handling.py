@@ -1,14 +1,16 @@
 import logging
-from typing import Dict, Any, List
+from typing import Any
+
 import numpy as np
-from qupyt.hardware.sensors import Sensor
+
+from qupyt.hardware.sensor import Sensor
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
 
 
 class Data(ConfigurationMixin):
     attribute_map: UpdateConfigurationType
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    def __init__(self, configuration: dict[str, Any]) -> None:
         self.roi_shape: list[int]
         self.averaging_mode: str
         self.number_dynamic_steps: int
@@ -42,7 +44,9 @@ class Data(ConfigurationMixin):
         self.reference_channels = int(reference_channels)
 
     def _set_compress_mode(self, compression_value: bool) -> None:
-        logging.warning("Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead")
+        logging.warning(
+            "Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead"
+        )
         self.live_compression = compression_value
 
     def _set_live_compression(self, live_compression: bool) -> None:
@@ -66,7 +70,7 @@ class Data(ConfigurationMixin):
     def _set_number_measurements(self, number_measurements: int) -> None:
         self.number_measurements = number_measurements
 
-    def _set_roi_shape(self, roi_shape: List[int]) -> None:
+    def _set_roi_shape(self, roi_shape: list[int]) -> None:
         self.roi_shape = roi_shape
 
     def _set_filename(self, filename: tuple[str, str]) -> None:
@@ -103,7 +107,9 @@ class Data(ConfigurationMixin):
                 *self.roi_shape,
             ]
         elif self.averaging_mode == "spread":
-            measurements_per_channel = self.number_measurements / self.reference_channels
+            measurements_per_channel = (
+                self.number_measurements / self.reference_channels
+            )
             if measurements_per_channel != int(measurements_per_channel):
                 raise ValueError(f"""Your number of measurements {self.number_measurements} is not divisible by the number of channels {self.reference_channels}.
                 Please make sure the number of measurements you want to recored can be distributed accross the reference channels. (I.e. number_measurements is divisible by reference_cannels""")
@@ -128,21 +134,27 @@ class Data(ConfigurationMixin):
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
         self.chunk_data = np.zeros_like(self.data)
 
-    def update_data(self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int) -> None:
+    def update_data(
+        self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int
+    ) -> None:
         if self.live_compression:
             self._update_data_compressed(data, ps_step, dynamic_step)
             if self.save_in_chunks != 0:
-                self._update_data_compressed(data, ps_step, dynamic_step, target_array=self.chunk_data)
+                self._update_data_compressed(
+                    data, ps_step, dynamic_step, target_array=self.chunk_data
+                )
         else:
             self._update_data_full(data, ps_step, dynamic_step)
             if self.save_in_chunks != 0:
-                self._update_data_full(data, ps_step, dynamic_step, target_array=self.chunk_data)
-        if (
-            self.save_in_chunks != 0
-            and (avg_step + 1) % self.save_in_chunks == 0
-        ):
+                self._update_data_full(
+                    data, ps_step, dynamic_step, target_array=self.chunk_data
+                )
+        if self.save_in_chunks != 0 and (avg_step + 1) % self.save_in_chunks == 0:
             self.save(
-                self.filename[0] + "_ch-" + f"{self.chunk_save_index}_" + self.filename[1],
+                self.filename[0]
+                + "_ch-"
+                + f"{self.chunk_save_index}_"
+                + self.filename[1],
                 source_data=self.chunk_data,
                 average_count=self.save_in_chunks,
             )
@@ -160,13 +172,15 @@ class Data(ConfigurationMixin):
             target_array = self.data
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
-                target_array[i, ps_step, dynamic_step] += data[i :: self.reference_channels].sum(
-                    axis=0
-                )
+                target_array[i, ps_step, dynamic_step] += data[
+                    i :: self.reference_channels
+                ].sum(axis=0)
             # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
-                target_array[i, ps_step, dynamic_step] += data[i :: self.reference_channels]
+                target_array[i, ps_step, dynamic_step] += data[
+                    i :: self.reference_channels
+                ]
                 # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
 
     def _update_data_compressed(
@@ -182,13 +196,17 @@ class Data(ConfigurationMixin):
             for i in range(self.reference_channels):
                 ndim = data.ndim
                 target_array[i, ps_step, dynamic_step] += (
-                    data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).sum(axis=0)
+                    data[i :: self.reference_channels]
+                    .mean(axis=tuple(range(1, ndim)))
+                    .sum(axis=0)
                 )
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
                 ndim = data.ndim
                 target_array[i, ps_step, dynamic_step] += (
-                    data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).reshape(-1, 1)
+                    data[i :: self.reference_channels]
+                    .mean(axis=tuple(range(1, ndim)))
+                    .reshape(-1, 1)
                 )
 
     def save(

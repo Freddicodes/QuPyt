@@ -7,7 +7,6 @@ on the user's machine.
 
 import pathlib
 from pathlib import Path
-from typing import Dict
 
 
 def get_log_dir() -> Path:
@@ -45,7 +44,7 @@ def get_home_dir() -> Path:
     return _make_user_dir_list()["homepath"]
 
 
-def _make_user_dir_list() -> Dict[str, Path]:
+def _make_user_dir_list() -> dict[str, Path]:
     homepath = pathlib.Path.home() / ".qupyt"
     homepath_log = pathlib.Path.home() / ".qupyt/log"
     homepath_sequences = pathlib.Path.home() / ".qupyt/sequences"

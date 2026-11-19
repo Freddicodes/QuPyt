@@ -1,5 +1,3 @@
-# pylint: disable=logging-format-interpolation
-# pylint: disable=logging-not-lazy
 """
 This file handles all aspect of the various signal sources in
 active use. Newly requested devices are opened and added
@@ -10,18 +8,18 @@ Edge cases like no requested devices are handeled.
 Device configuration and various output values to be set
 or sweeped are handled here as well.
 """
+
 import copy
 import logging
-from typing import Dict, Any, List, Union, Tuple
+from typing import Any
+
 import numpy as np
 from pydantic import validate_call
-from qupyt.hardware.signal_sources import DeviceFactory
 
-DynamicParameterInput = Union[
-    List[Union[float, int]],
-    Tuple[str, List[Union[float, int]]],
-    List[Tuple[str, List[Union[float, int]]]],
-]
+from qupyt.hardware.device.base import Device
+from qupyt.utils.types import DynamicParameterInput
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceHandler:
@@ -38,27 +36,27 @@ class DeviceHandler:
 
     def __init__(
         self,
-        requested_devices: Dict[str, Any],
+        requested_devices: dict[str, Any],
     ) -> None:
         """
         Initialize the DeviceHandler with a dictionary of requested devices.
 
         :param requested_devices: A dictionary containing the initial requested
                                   devices configuration.
-        :type requested_devices: Dict[str, Any]
+        :type requested_devices: dict[str, Any]
         """
-        self.requested_devices: Dict[str, Any] = {}
-        self.devices: Dict[str, Any] = {}
+        self.requested_devices: dict[str, Any] = {}
+        self.devices: dict[str, Any] = {}
         self.update_requested_device_dict(requested_devices)
 
-    def update_devices(self, requested_devices: Dict[str, Any]) -> None:
+    def update_devices(self, requested_devices: dict[str, Any]) -> None:
         """
         Update the device lists by closing all superfluous devices and opening
         newly requested devices.
 
         :param requested_devices: A dictionary containing the updated requested
                                   devices configuration.
-        :type requested_devices: Dict[str, Any]
+        :type requested_devices: dict[str, Any]
         """
         if requested_devices is None:
             self.requested_devices = {}
@@ -81,7 +79,7 @@ class DeviceHandler:
             if (key, value["address"]) not in requested_name_address_tuples:
                 self.devices[key]["device"].close()
                 rem = self.devices.pop(key)
-                logging.info(
+                logger.info(
                     f"Removed {rem} from active devices dict".ljust(65, ".") + "[done]"
                 )
 
@@ -98,10 +96,10 @@ class DeviceHandler:
         ]
         for key, value in list(self.requested_devices.items()):
             if (key, value["address"]) not in current_name_address_tuples:
-                device = DeviceFactory.create_device(value)
+                device = Device.create(value)
                 self.devices[key] = value
                 self.devices[key]["device"] = device
-                logging.info(
+                logger.info(
                     f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
                         65, "."
                     )
@@ -109,7 +107,7 @@ class DeviceHandler:
                 )
             else:
                 self.devices[key]["config"] = value["config"]
-                logging.info(
+                logger.info(
                     f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
                         65, "."
                     )
@@ -128,7 +126,7 @@ class DeviceHandler:
 
     def update_requested_device_dict(
         self,
-        requested_devices: Dict[str, Any],
+        requested_devices: dict[str, Any],
     ) -> None:
         """
         Create a deep copy of the requested devices dictionary to avoid altering
@@ -136,7 +134,7 @@ class DeviceHandler:
 
         :param requested_devices: Full configuration dictionary as loaded from
                                   config YAML.
-        :type requested_devices: Dict[str, Any]
+        :type requested_devices: dict[str, Any]
         """
         self.requested_devices = copy.deepcopy(requested_devices)
 
@@ -154,7 +152,7 @@ class DynamicDeviceHandler(DeviceHandler):
     """
 
     def __init__(
-        self, requested_devices: Dict[str, Any], number_dynamic_steps: int = 1
+        self, requested_devices: dict[str, Any], number_dynamic_steps: int = 1
     ) -> None:
         """
         Initialize the DynamicDeviceHandler with a dictionary of requested devices
@@ -162,7 +160,7 @@ class DynamicDeviceHandler(DeviceHandler):
 
         :param requested_devices: A dictionary containing the initial requested
                                   devices configuration.
-        :type requested_devices: Dict[str, Any]
+        :type requested_devices: dict[str, Any]
         :param number_dynamic_steps: The number of dynamic steps for device
                                      configuration changes, defaults to 1.
         :type number_dynamic_steps: int
@@ -191,11 +189,11 @@ class DynamicDeviceHandler(DeviceHandler):
                 # These will be updated for every new value.
                 creation_dict = copy.deepcopy(value)
                 creation_dict["config"] = {}
-                device = DeviceFactory.create_device(creation_dict)
+                device = Device.create(creation_dict)
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
-                logging.info(
+                logger.info(
                     f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
                         65, "."
                     )
@@ -203,7 +201,7 @@ class DynamicDeviceHandler(DeviceHandler):
                 )
             else:
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
-                logging.info(
+                logger.info(
                     f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
                         65, "."
                     )
@@ -267,7 +265,7 @@ class DynamicDeviceHandler(DeviceHandler):
         Use pydantic to enforce correct type.
         Based on this parse the input into a defined type of:
 
-        List[Tuple[str, List[Union[float, int]]]]
+        list[tuple[str, list[Union[float, int]]]]
 
         This makes further handling very easy.
         """

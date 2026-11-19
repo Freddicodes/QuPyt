@@ -1,17 +1,20 @@
 """
 Generation of yaml file based pulse sequences.
 """
+
 import re
-from typing import Dict, Any, Optional
-import yaml
-from qupyt import set_up
+from typing import Any, Optional
+
 import numpy as np
+import yaml
+
+from qupyt import set_up
 
 
 class YamlSequence:
     def __init__(self, duration: float) -> None:
-        self.pulse_sequence: Dict[str, Any] = {}
-        self.counter: Dict[str, Any] = {}
+        self.pulse_sequence: dict[str, Any] = {}
+        self.counter: dict[str, Any] = {}
         self.sequencing_order: list[str]
         self.sequencing_repeats: list[int]
         self.pulse_sequence["total_duration"] = duration
@@ -46,7 +49,9 @@ class YamlSequence:
             self.counter[sequence_block][pulse_channel] += 1
 
     def write(self, sequence_number: int | None = None) -> None:
-        sequence_number_string = "0" if sequence_number is None else str(sequence_number)
+        sequence_number_string = (
+            "0" if sequence_number is None else str(sequence_number)
+        )
         file_path = set_up.get_seq_dir()
         file_name = f"sequence_{sequence_number_string}.yaml"
         self.pulse_sequence["sequencing_order"] = self.sequencing_order
@@ -73,7 +78,7 @@ class ComplexSequence:
         blocks: list[str] = ["block_0"],
         global_phase: float = 0,
         ts_start: float = 1,
-        ts_end: float = 1
+        ts_end: float = 1,
     ) -> None:
         self.sequence = sequence_instance
         self.channel: str = channel
@@ -135,14 +140,13 @@ class ComplexSequence:
             raise ValueError(f"Invalid sequence type: {seq_type}")
 
         seq_name, N = match.groups()
-        seq_name = seq_name.upper() # convert to uppercase letters
-        N = int(N) # convert N to integer
+        seq_name = seq_name.upper()  # convert to uppercase letters
+        N = int(N)  # convert N to integer
 
         initial_phase = [0.0]
         final_phase = [readout_phase]
 
         if seq_name == "XY":
-
             # base: XY4 block
             phase_block = [0, np.pi / 2, 0, np.pi / 2]
 
@@ -154,18 +158,20 @@ class ComplexSequence:
             if len(phase_block) != N:
                 raise ValueError(f"Invalid XY lenght: {N}. N must be 4, 8, 16, 32, ...")
 
-
-        elif seq_name == "UD": # From: Supplemental material to Arbitrarily accurate pulse sequences for robust dynamical decoupling
-
+        elif (
+            seq_name == "UD"
+        ):  # From: Supplemental material to Arbitrarily accurate pulse sequences for robust dynamical decoupling
             phase_block = []
 
             # Determine phase increment
             if N % 4 == 0:
                 phi_ud = np.pi / (N / 4)
             elif N % 4 == 2 and N != 2:
-                phi_ud = (np.pi * (N - 2) / 2) / (((N - 2) / 2 ) + 1)
+                phi_ud = (np.pi * (N - 2) / 2) / (((N - 2) / 2) + 1)
             else:
-                raise ValueError(f"Invalid ud length. The value has to be even and four or higher.")
+                raise ValueError(
+                    f"Invalid ud length. The value has to be even and four or higher."
+                )
 
             # Generate quadratic phases
             if phi_ud is not None:
@@ -181,7 +187,6 @@ class ComplexSequence:
         self.phases = initial_phase + list(phase_block) * n + final_phase
         return None
 
-
     def write_sequence(self, start: float = 0) -> None:
         """Iterates over phases attibute and appends
         pulses to sequece instance.
@@ -196,12 +201,21 @@ class ComplexSequence:
         for i, phase in enumerate(self.phases[1:-1]):
             if i == 0:
                 self.append_pulse(
-                    self.channel, start, self.pi_pulse_dur, phase, taushift=self.ts_start
+                    self.channel,
+                    start,
+                    self.pi_pulse_dur,
+                    phase,
+                    taushift=self.ts_start,
                 )
             else:
                 self.append_pulse(self.channel, start, self.pi_pulse_dur, phase)
         self.append_pulse(
-            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=self.ts_end, hard_delay = self.pi_half_pulse_dur
+            self.channel,
+            start,
+            self.pi_half_pulse_dur,
+            self.phases[-1],
+            taushift=self.ts_end,
+            hard_delay=self.pi_half_pulse_dur,
         )
 
 

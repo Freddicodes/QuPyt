@@ -1,23 +1,35 @@
-from qupyt.hardware.sensors import SensorFactory
-from qupyt.measurement_logic.data_handling import Data
 import pytest
+
+from qupyt.hardware.sensor import Sensor
+from qupyt.measurement_logic.data_handling import Data
 
 
 # Tests if the number_measurements can be distributed accross the reference channels.
 # Should pass if number_measurements is divisible by reference_channels.
-@pytest.mark.parametrize("reference_channels", [1, 2, 10])  # nframes = 10 should be divisible.
+@pytest.mark.parametrize(
+    "reference_channels", [1, 2, 10]
+)  # nframes = 10 should be divisible.
 def test_set_dims_from_sensor(reference_channels):
     dynamic_steps = 6
     nframes = 10
     roi = [10, 10]
-    cam = SensorFactory.create_sensor("MockCam", {"number_measurements": nframes, "image_roi": roi})
-    data = Data({"averaging_mode":"spread",
-                 "dynamic_steps": dynamic_steps,
-                 "live_compression": False,
-                 "reference_channels": reference_channels})
+    cam = Sensor.create("MockCam", {"number_measurements": nframes, "image_roi": roi})
+    data = Data(
+        {
+            "averaging_mode": "spread",
+            "dynamic_steps": dynamic_steps,
+            "live_compression": False,
+            "reference_channels": reference_channels,
+        }
+    )
     data.set_dims_from_sensor(cam)
     data.create_array()
-    assert data.data.shape == (reference_channels, dynamic_steps, int(nframes/reference_channels), *roi)
+    assert data.data.shape == (
+        reference_channels,
+        dynamic_steps,
+        int(nframes / reference_channels),
+        *roi,
+    )
 
 
 # Tests if the number_measurements can be distributed accross the reference channels.
@@ -27,11 +39,15 @@ def test_set_dims_from_sensor_refuse_dist_measurements_channels(reference_channe
     dynamic_steps = 6
     nframes = 10
     roi = [10, 10]
-    cam = SensorFactory.create_sensor("MockCam", {"number_measurements": nframes, "image_roi": roi})
-    data = Data({"averaging_mode": "spread",
-                 "dynamic_steps": dynamic_steps,
-                 "live_compression": False,
-                 "reference_channels": reference_channels})
+    cam = Sensor.create("MockCam", {"number_measurements": nframes, "image_roi": roi})
+    data = Data(
+        {
+            "averaging_mode": "spread",
+            "dynamic_steps": dynamic_steps,
+            "live_compression": False,
+            "reference_channels": reference_channels,
+        }
+    )
     data.set_dims_from_sensor(cam)
     with pytest.raises(ValueError):
         data.create_array()
@@ -44,16 +60,27 @@ def test_set_dims_from_sensor_refuse_dist_measurements_channels(reference_channe
 def test_set_dims_from_sensor_various_rois(reference_channels, image_roi):
     dynamic_steps = 6
     nframes = 10
-    cam = SensorFactory.create_sensor("MockCam", {"number_measurements": nframes, "image_roi": image_roi})
-    # Bypass the roi parsing mechanism of the Mock Sensor to test the behaviour of the Data cotainer. 
+    cam = Sensor.create(
+        "MockCam", {"number_measurements": nframes, "image_roi": image_roi}
+    )
+    # Bypass the roi parsing mechanism of the Mock Sensor to test the behaviour of the Data cotainer.
     cam.roi_shape = image_roi
-    data = Data({"averaging_mode": "spread",
-                 "dynamic_steps": dynamic_steps,
-                 "live_compression": False,
-                 "reference_channels": reference_channels})
+    data = Data(
+        {
+            "averaging_mode": "spread",
+            "dynamic_steps": dynamic_steps,
+            "live_compression": False,
+            "reference_channels": reference_channels,
+        }
+    )
     data.set_dims_from_sensor(cam)
     data.create_array()
-    assert data.data.shape == (reference_channels, dynamic_steps, int(nframes/reference_channels), *image_roi)
+    assert data.data.shape == (
+        reference_channels,
+        dynamic_steps,
+        int(nframes / reference_channels),
+        *image_roi,
+    )
     data.update_data(cam.acquire_data(), 0, 0)
 
 
@@ -64,16 +91,27 @@ def test_set_dims_from_sensor_various_rois(reference_channels, image_roi):
 def test_set_dims_from_sensor_compression(reference_channels, image_roi):
     dynamic_steps = 6
     nframes = 10
-    cam = SensorFactory.create_sensor("MockCam", {"number_measurements": nframes, "image_roi": image_roi})
-    # Bypass the roi parsing mechanism of the Mock Sensor to test the behaviour of the Data cotainer. 
+    cam = Sensor.create(
+        "MockCam", {"number_measurements": nframes, "image_roi": image_roi}
+    )
+    # Bypass the roi parsing mechanism of the Mock Sensor to test the behaviour of the Data cotainer.
     cam.roi_shape = image_roi
-    data = Data({"averaging_mode": "spread",
-                 "dynamic_steps": dynamic_steps,
-                 "live_compression": True,
-                 "reference_channels": reference_channels})
+    data = Data(
+        {
+            "averaging_mode": "spread",
+            "dynamic_steps": dynamic_steps,
+            "live_compression": True,
+            "reference_channels": reference_channels,
+        }
+    )
     data.set_dims_from_sensor(cam)
     data.create_array()
-    assert data.data.shape == (reference_channels, dynamic_steps, int(nframes/reference_channels), 1)
+    assert data.data.shape == (
+        reference_channels,
+        dynamic_steps,
+        int(nframes / reference_channels),
+        1,
+    )
     data.update_data(cam.acquire_data(), 0, 0)
 
 

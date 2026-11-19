@@ -1,18 +1,25 @@
-import logging
-import re
-import pickle
-from typing import Dict, Any, List, Tuple, Optional
 import hashlib
+import logging
+import pickle
+import re
 from pathlib import Path
+from typing import Any
+
 import numpy as np
-from termcolor import colored
 import yaml
+from termcolor import colored
+
 from qupyt.set_up import get_seq_dir
 
+logger = logging.getLogger(__name__)
 
-def parse_awg_flag(selector: str, channels: list[int]) -> Tuple[str, Optional[int]]:
+
+def parse_awg_flag(selector: str, channels: list[int]) -> tuple[str, int | None]:
     """Parse a flag selector; its suffix is a physical AWG source channel."""
-    if not isinstance(selector, str) or re.fullmatch(r"[ABCD](?:[12])?", selector) is None:
+    if (
+        not isinstance(selector, str)
+        or re.fullmatch(r"[ABCD](?:[12])?", selector) is None
+    ):
         raise ValueError(
             f"Invalid AWG flag selector {selector!r}; expected A, B, C, D "
             "or a flag followed by physical AWG channel 1 or 2 (for example A2)."
@@ -31,12 +38,12 @@ class PulseSequenceYaml:
         self,
         #  Channel list as you think about them
         #  marker 1, marker 2 and so on
-        channel_mapping: Dict[str, Any],
+        channel_mapping: dict[str, Any],
         #  Source as the AWG thinks about them
         #  e.g. source1 might include analog 1, marker 1, ...
         #  There is one analog channel per source but mulitple makers etc.
         awg_sources: list[int],
-        samprate: float,# = 5e9,
+        samprate: float,  # = 5e9,
         yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.yaml_file = yaml_file
@@ -90,7 +97,7 @@ class PulseSequenceYaml:
             self.awg_sources,
             samprate=self.samp_rate,
         )
-        flag_channels: Dict[str, Any] = {}
+        flag_channels: dict[str, Any] = {}
         for i, block in enumerate(sorted_pulse_blocks):
             flag_channels[block] = []
             for channel, pulses in sequence_instructions[block].items():
@@ -140,7 +147,7 @@ class PulseSequence:
                     "red",
                 )
             )
-            logging.warning(
+            logger.warning(
                 "The sequence duration is not an integer multiple of samples".ljust(
                     65, "."
                 )
@@ -177,7 +184,7 @@ class PulseSequence:
                     "red",
                 )
             )
-            logging.warning(
+            logger.warning(
                 "The start of duration is not an integer mulitple of samples".ljust(
                     65, "."
                 )
@@ -207,7 +214,7 @@ class PulseSequence:
             start = self.time_to_index(start)
             duration = self.time_to_index(duration)
         else:
-            logging.info("Interpreting input as number of sampling points!")
+            logger.info("Interpreting input as number of sampling points!")
 
         if freq is not None:
             frequency, phase = freq
@@ -221,14 +228,14 @@ class PulseSequence:
         try:
             self.pulses[
                 numseq[0] : numseq[1], channel, int(start) : int(start + duration)
-            ] = (amplitude * fr)
+            ] = amplitude * fr
         except Exception:
             self.pulses[numseq, channel, int(start) : int(start + duration)] = (
                 amplitude * fr
             )
 
     def make(self, name: str) -> None:
-        logging.info(
+        logger.info(
             f"There where {self.warning_counter} warnings in PS generation".ljust(
                 65, "."
             )
@@ -260,27 +267,27 @@ class PulseSequence:
             self.properties,
             self.flag_channels,
         )
-        logging.info(f"Pulse sequence written to {name}".ljust(65, ".") + "[done]")
+        logger.info(f"Pulse sequence written to {name}".ljust(65, ".") + "[done]")
 
 
 class PulseBlasterSequence:
     def __init__(
         self,
-        channel_mapping: Dict[str, Any],
+        channel_mapping: dict[str, Any],
         yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
-        self.event_times: List[float] = []
-        self.event_durations: List[float] = []
-        self.event_channel: List[str] = []
-        self.events: List[str] = []
-        self.channel_bits: List[int] = []
-        self.segment_durations: List[float] = []
+        self.event_times: list[float] = []
+        self.event_durations: list[float] = []
+        self.event_channel: list[str] = []
+        self.events: list[str] = []
+        self.channel_bits: list[int] = []
+        self.segment_durations: list[float] = []
         self.channel_mapping = channel_mapping
-        self.ps: Dict[str, Any] = {}
-        self.yaml_sequence: Dict[str, Any] = self._load_yaml_sequence(yaml_file)
+        self.ps: dict[str, Any] = {}
+        self.yaml_sequence: dict[str, Any] = self._load_yaml_sequence(yaml_file)
         self.total_duration = self.yaml_sequence["total_duration"]
 
-    def _load_yaml_sequence(self, path: Path) -> Dict[str, Any]:
+    def _load_yaml_sequence(self, path: Path) -> dict[str, Any]:
         with open(path, "r", encoding="utf-8") as file:
             yaml_sequence = yaml.safe_load(file)
         return yaml_sequence
@@ -297,7 +304,7 @@ class PulseBlasterSequence:
             }
             self._reset_attributes()
 
-    def compile(self) -> Tuple[List[int], List[float]]:
+    def compile(self) -> tuple[list[int], list[float]]:
         """
         combines the individual sub seqeunces into one long sequence that
         can be uploaded to the pulse blaster card in one go.
@@ -322,7 +329,7 @@ class PulseBlasterSequence:
         self.channel_bits = []
         self.segment_durations = []
 
-    def _append_event(self, channel: str, pulse: Dict[str, float]) -> None:
+    def _append_event(self, channel: str, pulse: dict[str, float]) -> None:
         self.event_times.append(pulse["start"])
         self.event_times.append(pulse["start"] + pulse["duration"])
         self.event_channel.append(channel)
@@ -330,11 +337,11 @@ class PulseBlasterSequence:
         self.events.append("up")
         self.events.append("down")
 
-    def _parse_channel(self, channel: str, channel_pulses: Dict[str, Any]) -> None:
+    def _parse_channel(self, channel: str, channel_pulses: dict[str, Any]) -> None:
         for pulse in channel_pulses.values():
             self._append_event(channel, pulse)
 
-    def _parse_block(self, ps_block: Dict[str, Any]) -> None:
+    def _parse_block(self, ps_block: dict[str, Any]) -> None:
         for channel, channel_pulses in ps_block.items():
             self._parse_channel(channel, channel_pulses)
 
