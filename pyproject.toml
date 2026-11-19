@@ -1,46 +1,46 @@
 [build-system]
-requires = ["setuptools", "setuptools_scm"]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = 'qupyt'
+name = "qupyt"
 dynamic = ["version"]
-description = 'Provide a framework for quantum sensing experiments'
-license = {text = 'No license of for commercial or non-commercial use is granted'}
+description = "Provide a framework for quantum sensing experiments"
+license = {text = "No license of for commercial or non-commercial use is granted"}
 requires-python = ">=3.14"
 dependencies = [
-    'numpy',
-    'PyYAML',
-    'pydantic',
-    'termcolor',
-    'tqdm',
-    'watchdog==7.1.0',
+    "numpy",
+    "PyYAML",
+    "pydantic",
+    "termcolor",
+    "tqdm",
+    "watchdog==7.1.0",
 ]
-#author = 'Karl Briegel'
-#author_email = 'karl.briegel@tum.de'
+#author = "Karl Briegel"
+#author_email = "karl.briegel@tum.de"
 
 # Hardware drivers, one extra per device family, e.g. pip install qupyt[basler].
 # Not on PyPI, install from the vendor: egrabber (Euresys, PhantomS710),
 # libHeLIC (Heliotis, HeliC3), SpinAPI (SpinCore, PulseBlaster).
 [project.optional-dependencies]
-basler = ['pypylon']
-daq = ['nidaqmx']
-genicam = ['harvesters']
-pulsestreamer = ['pulsestreamer']
-windfreak = ['windfreak', 'pyserial']
-konrad = ['pyserial']
-visa = ['PyVISA', 'pyvisa-py']
-tekawg = ['PyVISA', 'pyvisa-py', 'matplotlib']
-all = ['qupyt[basler,daq,genicam,pulsestreamer,windfreak,konrad,visa,tekawg]']
+basler = ["pypylon"]
+daq = ["nidaqmx"]
+genicam = ["harvesters"]
+pulsestreamer = ["pulsestreamer"]
+windfreak = ["windfreak", "pyserial"]
+konrad = ["pyserial"]
+visa = ["PyVISA", "pyvisa-py"]
+tekawg = ["PyVISA", "pyvisa-py", "matplotlib"]
+all = ["qupyt[basler,daq,genicam,pulsestreamer,windfreak,konrad,visa,tekawg]"]
+
+[project.scripts]
+qupyt = "qupyt.main:main"
 
 [tool.setuptools.packages]
 find = {}
 
 [tool.setuptools_scm]
-write_to = "qupyt/_version.py"
-
-[project.scripts]
-qupyt = "qupyt.main:main"
+version_file = "qupyt/_version.py"
 
 [tool.mypy]
 check_untyped_defs = true
@@ -64,11 +64,10 @@ show_column_numbers = true
 # disallow_any_expr = true
 # disallow_any_explicit = true
 strict = true
-enable_recursive_aliases = true
-follow_imports = 'normal'
+follow_imports = "normal"
 strict_optional = true
-# mypy_path = ['qupyt']
-files = ['qupyt']
+# mypy_path = ["qupyt"]
+files = ["qupyt"]
 
 [tool.pylsp]
 configurationSources = ["pyproject.toml"]
