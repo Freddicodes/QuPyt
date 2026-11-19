@@ -28,3 +28,4 @@ sample_yamls/
 # Ignore auto-generated version file
 qupyt/_version.py
 todo.md
+bugs.md
