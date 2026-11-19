@@ -26,6 +26,7 @@ def test_set_dims_from_sensor(reference_channels):
     data.create_array()
     assert data.data.shape == (
         reference_channels,
+        1,  # number_pulse_sequences (default)
         dynamic_steps,
         int(nframes / reference_channels),
         *roi,
@@ -77,11 +78,12 @@ def test_set_dims_from_sensor_various_rois(reference_channels, image_roi):
     data.create_array()
     assert data.data.shape == (
         reference_channels,
+        1,  # number_pulse_sequences (default)
         dynamic_steps,
         int(nframes / reference_channels),
         *image_roi,
     )
-    data.update_data(cam.acquire_data(), 0, 0)
+    data.update_data(cam.acquire_data(), 0, 0, 0)
 
 
 # Tests the correct Data container ROI compression for
@@ -108,11 +110,12 @@ def test_set_dims_from_sensor_compression(reference_channels, image_roi):
     data.create_array()
     assert data.data.shape == (
         reference_channels,
+        1,  # number_pulse_sequences (default)
         dynamic_steps,
         int(nframes / reference_channels),
         1,
     )
-    data.update_data(cam.acquire_data(), 0, 0)
+    data.update_data(cam.acquire_data(), 0, 0, 0)
 
 
 # No dimension of the data container can be zero
