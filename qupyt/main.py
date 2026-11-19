@@ -72,16 +72,16 @@ parser.add_argument(
 args = parser.parse_args()
 
 logfile = get_log_dir() / f"log_{date.today()}.log"
-handlers: list[logger.Handler] = [logger.FileHandler(logfile)]
+handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
 if args.verbose:
-    handlers.append(logger.StreamHandler())
-logger.basicConfig(
+    handlers.append(logging.StreamHandler())
+logging.basicConfig(
     handlers=handlers,
     # filename='logfile.log',
     format="%(levelname)s\t%(asctime)s %(message)s",
     datefmt="%Y/%m/%d %I:%M:%S %p",
     encoding="utf-8",
-    level=logger.INFO,
+    level=logging.INFO,
     force=True,
 )
 
