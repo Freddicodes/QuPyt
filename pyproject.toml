@@ -14,7 +14,7 @@ dependencies = [
     'pydantic',
     'termcolor',
     'tqdm',
-    'watchdog==3.0.0',
+    'watchdog==7.1.0',
 ]
 #author = 'Karl Briegel'
 #author_email = 'karl.briegel@tum.de'

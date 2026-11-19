@@ -222,7 +222,12 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
             ignore_directories (bool, optional): Whether to ignore changes in directories. Defaults to False.
             case_sensitive (bool, optional): Whether file pattern matching is case sensitive. Defaults to False.
         """
-        super().__init__(patterns, ignore_patterns, ignore_directories, case_sensitive)
+        super().__init__(
+            patterns=patterns,
+            ignore_patterns=ignore_patterns,
+            ignore_directories=ignore_directories,
+            case_sensitive=case_sensitive,
+        )
         if platform.system() == "Windows":
             self.on_modified = self._on_modified
         if platform.system() == "Linux":
@@ -293,7 +298,7 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
 
 
 def _get_observer_event_hanlder() -> WaitingRoomEventHandler:
-    patterns = ["*.yaml"]
+    patterns = ["**/*.yaml"]
     ignore_patterns = None
     ignore_directories = True
     case_sensitive = True
