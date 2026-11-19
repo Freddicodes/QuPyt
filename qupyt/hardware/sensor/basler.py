@@ -3,8 +3,8 @@ from time import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-from pypylon import pylon
 from qupyt.exceptions import ConfigurationError
+from qupyt.utils.imports import install_hint
 
 from .base import Sensor
 
@@ -48,8 +48,12 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
-        self.cam = pylon.InstantCamera(
-            pylon.TlFactory.GetInstance().CreateFirstDevice()
+        with install_hint("basler"):
+            from pypylon import pylon
+
+        self._pylon = pylon
+        self.cam = self._pylon.InstantCamera(
+            self._pylon.TlFactory.GetInstance().CreateFirstDevice()
         )
         self.cam.Open()
         self._configure_defaults()
@@ -109,7 +113,7 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
             synchroniser.trigger()
         for i in range(self.number_measurements):
             grab_result = self.cam.RetrieveResult(
-                int(5000), pylon.TimeoutHandling_ThrowException
+                int(5000), self._pylon.TimeoutHandling_ThrowException
             )
             frame = np.asarray(grab_result.Array)
             arr[i] = frame

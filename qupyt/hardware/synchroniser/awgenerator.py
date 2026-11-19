@@ -5,7 +5,6 @@ from pathlib import Path
 from time import time
 from typing import Any, Self
 
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from termcolor import colored
@@ -17,6 +16,7 @@ from qupyt.pulse_sequences.sequence_designer import (
     parse_awg_flag,
 )
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_awg_limit
 
@@ -720,6 +720,9 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
          uploaded sequence block to query and plot.
         :type wavename: str
         """
+        with install_hint("tekawg"):
+            import matplotlib.pyplot as plt
+
         marker = self.instance.query_binary_values(
             'wlist:waveform:marker:data? "' + wavename + '"', datatype="B"
         )

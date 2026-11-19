@@ -1,5 +1,3 @@
-# pylint: disable=logging-format-interpolation
-# pylint: disable=logging-not-lazy
 """
 Power Supply remote control.
 Currently only the Konrad KD300/6000 are supported.
@@ -12,7 +10,7 @@ import logging
 from abc import abstractmethod
 from typing import Any
 
-import serial
+from qupyt.utils.imports import install_hint
 
 from .base import Device
 
@@ -68,6 +66,8 @@ class KonradKD300060000(PowerSupply, device_types=("KonradKD3000", "KonradKD6000
         serial.SerialException
             if the port cannot be opened.
         """
+        with install_hint("konrad"):
+            import serial
 
         super().__init__(configuration)
         self.address: str = address
@@ -85,7 +85,14 @@ class KonradKD300060000(PowerSupply, device_types=("KonradKD3000", "KonradKD6000
         return f"Power supply of type {type(self).__name__} (address: {self.address})"
 
     def _turn_off(self) -> None:
-        self.instance.write(b"OUT1")
+        self.instance.write(b"OUT0")
 
     def _turn_on(self) -> None:
-        self.instance.write(b"OUT0")
+        self.instance.write(b"OUT1")
+
+    def close(self) -> None:
+        """Release the connection to the device."""
+        if not hasattr(self, "instance"):
+            return
+        self.instance.close()
+        del self.instance

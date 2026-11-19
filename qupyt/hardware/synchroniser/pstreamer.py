@@ -3,17 +3,10 @@ from typing import Any
 
 import numpy as np
 import yaml
-from pulsestreamer import (
-    OutputState,
-    PulseStreamer,
-    Sequence,
-    TriggerRearm,
-    TriggerStart,
-    findPulseStreamers,
-)
 
 from qupyt import set_up
 from qupyt.exceptions import PulseSequenceError
+from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
 
@@ -24,6 +17,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
     def __init__(
         self, configuration: dict[str, Any], channel_mapping: dict[str, Any]
     ) -> None:
+        with install_hint("pulsestreamer"):
+            import pulsestreamer
+
+        self._pulsestreamer = pulsestreamer
         super().__init__(configuration, channel_mapping)
         self.channel_mapping = channel_mapping
         self._update_from_configuration(configuration)
@@ -38,7 +35,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         return f"Synchronizer of type PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def _find_pulse_streamers(self) -> None:
-        devices = findPulseStreamers()
+        devices = self._pulsestreamer.findPulseStreamers()
         if devices:
             print("Detected PulseStreamer: ")
             print(devices)
@@ -56,7 +53,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         """
         # if no IP adress is provided, try to detect one:
         try:
-            self.pulser = PulseStreamer(self.address)
+            self.pulser = self._pulsestreamer.PulseStreamer(self.address)
             logger.info(
                 f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
             )
@@ -81,7 +78,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         """
         try:
             # define the final state of the Pulsestreamer
-            _ = OutputState.ZERO()
+            _ = self._pulsestreamer.OutputState.ZERO()
             # force the final state.
             self.pulser.forceFinal()
             # print a text if the program has successfully ended
@@ -230,7 +227,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
             self.sequence.plot()
         else:
             print(
-                "Warning (plot_sequence()): No sequence is streaming in the PulseStreamer."
+                "Warning (plot_sequence()): No sequence is streaming in the self._pulsestreamer.PulseStreamer."
             )
 
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
@@ -271,14 +268,14 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
             # These will be sequenced together later.
             sequences_to_write = {}
             for block in set(sequence_order):
-                sequences_to_write[block] = Sequence()
+                sequences_to_write[block] = self._pulsestreamer.Sequence()
                 self.pulse_list = full_pulse_list[block]
                 self.check_types(self.pulse_list)
                 for channel in self.pulse_list:
                     sequences_to_write[block].setDigital(
                         self.channel_mapping[channel], self.writeDigSeq(channel)
                     )
-            self.sequence = Sequence()
+            self.sequence = self._pulsestreamer.Sequence()
             for block, repetitions in zip(sequence_order, sequencing_repeats):
                 self.sequence += repetitions * sequences_to_write[block]
 
@@ -303,13 +300,13 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
 
             # reset the device - all outputs 0V
             self.pulser.reset()
-            self.pulser.constant(OutputState.ZERO())  # all outputs 0V
-            final = OutputState.ZERO()
+            self.pulser.constant(self._pulsestreamer.OutputState.ZERO())  # all outputs 0V
+            final = self._pulsestreamer.OutputState.ZERO()
 
             # Start the sequence after the upload and disable
             # the retrigger-function
-            start = TriggerStart.IMMEDIATE
-            rearm = TriggerRearm.MANUAL
+            start = self._pulsestreamer.TriggerStart.IMMEDIATE
+            rearm = self._pulsestreamer.TriggerRearm.MANUAL
             self.pulser.setTrigger(start=start, rearm=rearm)
 
             # upload the sequence and arm the device

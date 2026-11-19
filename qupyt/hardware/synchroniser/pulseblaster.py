@@ -7,9 +7,9 @@ from typing import Any
 import yaml
 from termcolor import colored
 
-import qupyt.hardware.wrappers.spinapi_adapted as spapi
 from qupyt.pulse_sequences.sequence_designer import PulseBlasterSequence
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
 
@@ -82,10 +82,10 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         minimum instruction clock cycle and PB channel connections.
 
         """
-        if spapi is None:
-            raise RuntimeError(
-                "This class requires 'spinapi' by SpinCore to be installed and functional"
-            )
+        with install_hint(vendor="Install SpinAPI from SpinCore or set SPINAPI_LIBRARY to the library path."):
+            import qupyt.hardware.wrappers.spinapi_adapted as spapi
+
+        self._spapi = spapi
         self.device_type: str = "PulseBlaster"
         self.samprate: float = 500  # MHz
         self.pb_min_instr_clk_cycles = 5
@@ -129,7 +129,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         and check the current status of PB board.
         """
         # Close the communication with the PB board
-        status = spapi.pb_close()
+        status = self._spapi.pb_close()
         self.error_catcher(status)
 
     def run(self) -> None:
@@ -139,12 +139,12 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         However, Pulse Program execution will continue.
         """
         # Returns a 0 on success or a negative number on an error.
-        status = spapi.pb_start()
+        status = self._spapi.pb_start()
         self.error_catcher(status)
         print(colored("Started execution of Pulseblaster card pulse program!", "green"))
 
     def trigger(self) -> None:
-        status = spapi.pb_start()
+        status = self._spapi.pb_start()
         self.error_catcher(status)
         print(colored("Started execution of Pulseblaster card pulse program!", "green"))
 
@@ -154,7 +154,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         communication. TTL outputs will return to zero.
         """
         # Returns a 0 on success or a negative number on an error.
-        status = spapi.pb_stop()
+        status = self._spapi.pb_stop()
         self.error_catcher(status)
         print(colored("Stopped execution of Pulseblaster card pulse program!", "green"))
 
@@ -169,7 +169,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
             int status: current status of PB board
         """
         if status < 0:
-            print("Error: ", spapi.pb_get_error())
+            print("Error: ", self._spapi.pb_get_error())
             sys.exit()
 
     def configure_pb(self) -> None:
@@ -178,15 +178,15 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         the core clock frequency of the board.
         """
         # 1 - Enable the spincore log file, appears as log.txt in current working directory
-        spapi.pb_set_debug(0)
+        self._spapi.pb_set_debug(0)
         # Initializing communication with the PulseBlasterESR-PRO board
-        status = spapi.pb_init()
+        status = self._spapi.pb_init()
         # catch error if any and exit the program
         self.error_catcher(status)
         # Configure the core clock frequency (in MHz)
-        spapi.pb_core_clock(self.samprate)
+        self._spapi.pb_core_clock(self.samprate)
 
-    def pb_inst_pbonly(flags, instruction, instruction_data, pulse_length):
+    def pb_inst_pbonly(self, flags, instruction, instruction_data, pulse_length):
         """
         Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success.
         If the function returns -99, an invalid parameter was passed to the function.
@@ -203,7 +203,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         Returns:
             int status: current PB board status
         """
-        return spapi.spinapi.pb_inst_pbonly(
+        return self._spapi.spinapi.pb_inst_pbonly(
             ctypes.c_uint(flags),
             ctypes.c_int(instruction),
             ctypes.c_int(instruction_data),
@@ -284,32 +284,32 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
 
             # Instructypesions for pulse sequence
             if i == 0:
-                start_instr_num = spapi.pb_inst_pbonly(
+                start_instr_num = self._spapi.pb_inst_pbonly(
                     channel_bit_mask,
-                    spapi.Inst.CONTINUE,
+                    self._spapi.Inst.CONTINUE,
                     0,
-                    pulse_duration * t_min * spapi.us,
+                    pulse_duration * t_min * self._spapi.us,
                 )
                 self.error_catcher(start_instr_num)
             elif i != len(channel_bit_masks) - 1:
-                status = spapi.pb_inst_pbonly(
+                status = self._spapi.pb_inst_pbonly(
                     channel_bit_mask,
-                    spapi.Inst.CONTINUE,
+                    self._spapi.Inst.CONTINUE,
                     0,
-                    pulse_duration * t_min * spapi.us,
+                    pulse_duration * t_min * self._spapi.us,
                 )
                 self.error_catcher(status)
             else:
-                status = spapi.pb_inst_pbonly(
+                status = self._spapi.pb_inst_pbonly(
                     channel_bit_mask,
-                    spapi.Inst.BRANCH,
+                    self._spapi.Inst.BRANCH,
                     start_instr_num,
-                    pulse_duration * t_min * spapi.us,
+                    pulse_duration * t_min * self._spapi.us,
                 )
                 self.error_catcher(status)
 
-        status = spapi.pb_inst_pbonly(
-            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us
+        status = self._spapi.pb_inst_pbonly(
+            0, self._spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * self._spapi.us
         )
         self.error_catcher(status)
 
@@ -321,7 +321,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         Starts the programming of PB pulse program
         """
         # Returns a 0 on success or a negative number on an error.
-        status = spapi.pb_start_programming(spapi.PULSE_PROGRAM)
+        status = self._spapi.pb_start_programming(self._spapi.PULSE_PROGRAM)
         self.error_catcher(status)
 
     def stop_programming(self) -> None:
@@ -329,7 +329,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         Stops the programming of PB pulse program
         """
         status = (
-            spapi.pb_stop_programming()
+            self._spapi.pb_stop_programming()
         )  # Returns a 0 on success or a negative number on an error.
         self.error_catcher(status)
 

@@ -8,9 +8,9 @@ dictionary for each device.
 import logging
 from time import sleep
 
-import pyvisa
 
 from qupyt.exceptions import ConfigurationError
+from qupyt.utils.imports import install_hint
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,9 @@ class VisaObject:
             )
         self.command: dict[str, str]
         self._get_instructions()
+        with install_hint("visa"):
+            import pyvisa
+
         try:
             resource_manager = pyvisa.ResourceManager()
             self.instance = resource_manager.open_resource(handle)

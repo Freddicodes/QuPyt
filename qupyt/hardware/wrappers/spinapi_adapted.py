@@ -76,7 +76,8 @@ def _load_library() -> ctypes.CDLL:
     raise ImportError(
         "Failed to load the SpinCore spinapi library. Tried:\n  "
         + "\n  ".join(errors)
-        + "\nSet SPINAPI_LIBRARY to the full path of the library to override."
+        + "\nSet SPINAPI_LIBRARY to the full path of the library to override.",
+        name="spinapi",
     ) from last_error
 
 

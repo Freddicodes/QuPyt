@@ -9,7 +9,7 @@ import logging
 from time import time
 
 import numpy as np
-from harvesters.core import Harvester
+from qupyt.utils.imports import install_hint
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,9 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
+        with install_hint("genicam"):
+            from harvesters.core import Harvester
+
         self.harvester = Harvester()
         self.cti_file = configuration["GenTL_producer_cti"]
         try:

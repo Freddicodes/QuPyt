@@ -1,12 +1,14 @@
 import logging
 from time import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-import libHeLIC as heli
 import numpy as np
-from qupyt.hardware.base import Synchroniser
+from qupyt.utils.imports import install_hint
 
 from .base import Sensor
+
+if TYPE_CHECKING:
+    from qupyt.hardware.synchroniser.base import Synchroniser
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +47,10 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
+        with install_hint(vendor="Install the libHeLIC Python package from Heliotis."):
+            import libHeLIC as heli
+
+        self._heli = heli
         self.settings = {
             "CamMode": 0,
             "SensNavM2": 6,
@@ -65,7 +71,7 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
-        self.he_sys = heli.LibHeLIC()
+        self.he_sys = self._heli.LibHeLIC()
         self.roi_shape = [300, 300]
 
     def __repr__(self) -> str:
@@ -97,7 +103,7 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             res = self.he_sys.Acquire()
         for key, value in self.settings.items():
             setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
+        self.he_sys.AllocCamData(1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
         self.he_sys.SetTimeout(10000)
         logger.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
@@ -119,10 +125,10 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             )
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
-        img = self.he_sys.GetCamData(1, 0, heli.ct.byref(meta))
+        img = self.he_sys.GetCamData(1, 0, self._heli.ct.byref(meta))
         data = img.contents.data
-        data = heli.LibHeLIC.Ptr2Arr(
-            data, (self.settings["SensNFrames"], 300, 300, 2), heli.ct.c_ushort
+        data = self._heli.LibHeLIC.Ptr2Arr(
+            data, (self.settings["SensNFrames"], 300, 300, 2), self._heli.ct.c_ushort
         )
         raw_frames = np.asarray((data), dtype="int32")
         return_frames = np.zeros((2 * self.settings["SensNFrames"], 300, 300))

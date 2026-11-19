@@ -4,31 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = 'qupyt'
-#version = '0.1.0'
 dynamic = ["version"]
 description = 'Provide a framework for quantum sensing experiments'
 license = {text = 'No license of for commercial or non-commercial use is granted'}
+requires-python = ">=3.14"
 dependencies = [
-    'numpy', 
-    'scipy',
-    'harvesters',
-    'matplotlib',
-    'nidaqmx',
     'numpy',
-    'pulsestreamer',
-    'pypylon',
-    'pyserial',
-    'PyVISA',
-    'pyvisa-py',
     'PyYAML',
+    'pydantic',
     'termcolor',
     'tqdm',
     'watchdog==3.0.0',
-    'windfreak',
-    'pydantic',
 ]
 #author = 'Karl Briegel'
 #author_email = 'karl.briegel@tum.de'
+
+# Hardware drivers, one extra per device family, e.g. pip install qupyt[basler].
+# Not on PyPI, install from the vendor: egrabber (Euresys, PhantomS710),
+# libHeLIC (Heliotis, HeliC3), SpinAPI (SpinCore, PulseBlaster).
+[project.optional-dependencies]
+basler = ['pypylon']
+daq = ['nidaqmx']
+genicam = ['harvesters']
+pulsestreamer = ['pulsestreamer']
+windfreak = ['windfreak', 'pyserial']
+konrad = ['pyserial']
+visa = ['PyVISA', 'pyvisa-py']
+tekawg = ['PyVISA', 'pyvisa-py', 'matplotlib']
+all = ['qupyt[basler,daq,genicam,pulsestreamer,windfreak,konrad,visa,tekawg]']
 
 [tool.setuptools.packages]
 find = {}

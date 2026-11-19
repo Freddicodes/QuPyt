@@ -1,12 +1,11 @@
 import logging
 from typing import Any
 
-import serial
 from pydantic import validate_call
-from windfreak import SynthHD
 
 from qupyt.utils.decorators import coerce_device_config_shape, loop_inputs
 from qupyt.utils.types import ChannelValue, ParameterInput
+from qupyt.utils.imports import install_hint
 
 from .signal_source import SignalSource
 
@@ -15,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
     def __init__(self, address: str, configuration: dict[str, Any]) -> None:
+        with install_hint("windfreak"):
+            import serial
+
         self.address: str = address
         super().__init__(configuration)
         try:
@@ -81,6 +83,9 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
 
 class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
     def __init__(self, address: str, configuration: dict[str, Any]) -> None:
+        with install_hint("windfreak"):
+            import serial
+
         self.address: str = address
         super().__init__(configuration)
         self.instance: serial.Serial = serial.Serial(self.address, timeout=1)
@@ -138,6 +143,9 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
 
 class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
     def __init__(self, address: str, configuration: dict[str, Any]) -> None:
+        with install_hint("windfreak"):
+            from windfreak import SynthHD
+
         self.address = address
         super().__init__(configuration)
         self.instance = SynthHD(self.address)
@@ -207,6 +215,9 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
 
 class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
     def __init__(self, address: str, configuration: dict[str, Any]) -> None:
+        with install_hint("windfreak"):
+            import serial
+
         self.address = address
         super().__init__(configuration)
         self.instance = serial.Serial(self.address, timeout=1)

@@ -4,24 +4,13 @@ import logging
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-from egrabber import (
-    BUFFER_INFO_BASE,
-    BUFFER_INFO_CUSTOM_NUM_PARTS,
-    BUFFER_INFO_CUSTOM_PART_SIZE,
-    BUFFER_INFO_TIMESTAMP,
-    INFO_DATATYPE_PTR,
-    INFO_DATATYPE_SIZET,
-    INFO_DATATYPE_UINT64,
-    Buffer,
-    EGenTL,
-    EGrabber,
-    EGrabberDiscovery,
-)
 from qupyt.exceptions import ConfigurationError
+from qupyt.utils.imports import install_hint
 
 from .base import Sensor
 
 if TYPE_CHECKING:
+    from egrabber import Buffer, EGrabber
     from qupyt.hardware.synchroniser.base import Synchroniser
 
 logger = logging.getLogger(__name__)
@@ -67,6 +56,10 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
+        with install_hint(vendor="Install the eGrabber SDK and its Python package from Euresys."):
+            import egrabber
+
+        self._egrabber = egrabber
         self.cam, self.cam_instance = self._discover_and_setup()
         super().__init__(configuration)
         # self.cam.remote_device.node_map.OffsetX.value = 0
@@ -102,11 +95,11 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         return f"Phantom S710 camera instance: GenICamPhantom(configuration: {self.initial_configuration_dict})"
 
     def _discover_and_setup(self) -> EGrabber:
-        gentl = EGenTL()
-        discovery = EGrabberDiscovery(gentl)
+        gentl = self._egrabber.EGenTL()
+        discovery = self._egrabber.EGrabberDiscovery(gentl)
         discovery.discover()
         cam = discovery.cameras[0]
-        self.grabber = EGrabber(cam)
+        self.grabber = self._egrabber.EGrabber(cam)
         return self.grabber, cam
 
     def _set_trigger_source(self, trigger_source: str) -> None:
@@ -237,7 +230,7 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
-            with Buffer(self.cam) as buffer:
+            with self._egrabber.Buffer(self.cam) as buffer:
                 buffer_ptr, image_size, part_num, timestep = self._grab_frame_info(
                     buffer
                 )
@@ -256,10 +249,10 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
-        buffer_ptr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
-        image_size = buffer.get_info(BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
-        part_num = buffer.get_info(BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
-        time_stamp = buffer.get_info(BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
+        buffer_ptr = buffer.get_info(self._egrabber.BUFFER_INFO_BASE, self._egrabber.INFO_DATATYPE_PTR)
+        image_size = buffer.get_info(self._egrabber.BUFFER_INFO_CUSTOM_PART_SIZE, self._egrabber.INFO_DATATYPE_SIZET)
+        part_num = buffer.get_info(self._egrabber.BUFFER_INFO_CUSTOM_NUM_PARTS, self._egrabber.INFO_DATATYPE_SIZET)
+        time_stamp = buffer.get_info(self._egrabber.BUFFER_INFO_TIMESTAMP, self._egrabber.INFO_DATATYPE_UINT64)
 
         return buffer_ptr, image_size, part_num, time_stamp
 

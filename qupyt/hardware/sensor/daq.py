@@ -3,14 +3,8 @@ import sys
 import traceback
 from typing import TYPE_CHECKING, Any, Optional
 
-import nidaqmx
 import numpy as np
-from nidaqmx.constants import (
-    AcquisitionType,
-    Edge,
-    TerminalConfiguration,
-    VoltageUnits,
-)
+from qupyt.utils.imports import install_hint
 
 from .base import Sensor
 
@@ -59,6 +53,11 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
+        with install_hint("daq"):
+            import nidaqmx
+            import nidaqmx.constants
+
+        self._nidaqmx = nidaqmx
         self.type: str = "DAQ"
         # configure various input ports ->
         # see inside NI-DAQ hardware for assignment.
@@ -95,7 +94,7 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         """
         try:
             self.NsampsPerDAQread: float = self.number_measurements
-            self.daq_task = nidaqmx.Task()
+            self.daq_task = self._nidaqmx.Task()
             self._create_analog_input_channel()
             self._configure_sample_clock()
             self._configure_analog_input_trigger()
@@ -114,10 +113,10 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         _ = self.daq_task.ai_channels.add_ai_voltage_chan(
             self.daq_apd_input,
             "",
-            TerminalConfiguration.RSE,
+            self._nidaqmx.constants.TerminalConfiguration.RSE,
             self.min_voltage,
             self.max_voltage,
-            VoltageUnits.VOLTS,
+            self._nidaqmx.constants.VoltageUnits.VOLTS,
         )
 
     def _configure_analog_input_trigger(self) -> None:
@@ -125,11 +124,11 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         # Specifies the terminal of the signal to use
         # as the AI Convert Clock.
         self.daq_task.timing.ai_conv_src = self.daq_sample_clk
-        self.daq_task.timing.ai_conv_active_edge = Edge.RISING
+        self.daq_task.timing.ai_conv_active_edge = self._nidaqmx.constants.Edge.RISING
         read_start_trig = self.daq_task.triggers.start_trigger
         # Configures the task to start acquiring samples
         # on the active edge of a digital signal.
-        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, Edge.RISING)
+        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, self._nidaqmx.constants.Edge.RISING)
 
     def _configure_sample_clock(self) -> None:
         # Configure sample clock : Sets the clock source, the clock rate,
@@ -138,8 +137,8 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         self.daq_task.timing.cfg_samp_clk_timing(
             self.daq_max_sampling_rate,
             self.daq_sample_clk,
-            Edge.RISING,
-            AcquisitionType.FINITE,
+            self._nidaqmx.constants.Edge.RISING,
+            self._nidaqmx.constants.AcquisitionType.FINITE,
             self.NsampsPerDAQread,
         )
 
