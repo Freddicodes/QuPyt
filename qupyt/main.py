@@ -75,6 +75,7 @@ def _configure_logging(settings: Settings) -> None:
         force=True,
     )
 
+
 queue: Queue[str]
 event_thread: threading.Event
 
@@ -220,7 +221,7 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         )
         if platform.system() == "Windows":
             self.on_modified = self._on_modified
-        if platform.system() == "Linux":
+        elif platform.system() == "Linux":
             self.on_closed = self._on_closed
         else:  # macOS or other
             self.on_created = self._on_created
