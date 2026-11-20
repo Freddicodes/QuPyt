@@ -33,6 +33,8 @@ konrad = ["pyserial"]
 visa = ["PyVISA", "pyvisa-py"]
 tekawg = ["PyVISA", "pyvisa-py", "matplotlib"]
 all = ["qupyt[basler,daq,genicam,pulsestreamer,windfreak,konrad,visa,tekawg]"]
+# Build the documentation: pip install qupyt[docs], then make html.
+docs = ["sphinx>=4.0", "sphinx_rtd_theme>=1.0"]
 
 [project.scripts]
 qupyt = "qupyt.main:main"
