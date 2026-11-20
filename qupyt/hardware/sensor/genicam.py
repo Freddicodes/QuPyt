@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from .base import Sensor
 
@@ -9,6 +9,7 @@ import logging
 from time import time
 
 import numpy as np
+
 from qupyt.utils.imports import install_hint
 
 logger = logging.getLogger(__name__)
@@ -139,29 +140,19 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
             self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
             logger.info(
-                "Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(65, ".")
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
                 + "[done]"
             )
         except Exception as exc:
             logger.exception(
-                "Failed to set roi of height: {} and width: {}\n\
-                               with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(65, ".")
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
                 + "[failed]"
             )
             raise exc
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         See :meth:`Sensor.acquire_data`.
         """

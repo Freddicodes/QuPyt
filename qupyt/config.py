@@ -51,12 +51,15 @@ class Settings(BaseSettings):
     )
     env_file: Path = Field(Path(".env"), description="Env file with QUPYT_* variables.")
     home_dir: Path = Field(DEFAULT_HOME_DIR, description="QuPyt user directory.")
-    log_dir: Path = Field(DEFAULT_HOME_DIR / "log", description="Default: <home-dir>/log.")
+    log_dir: Path = Field(
+        DEFAULT_HOME_DIR / "log", description="Default: <home-dir>/log."
+    )
     sequence_dir: Path = Field(
         DEFAULT_HOME_DIR / "sequences", description="Default: <home-dir>/sequences."
     )
     waiting_room_dir: Path = Field(
-        DEFAULT_HOME_DIR / "waiting_room", description="Default: <home-dir>/waiting_room."
+        DEFAULT_HOME_DIR / "waiting_room",
+        description="Default: <home-dir>/waiting_room.",
     )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_to_console: bool = Field(
@@ -78,8 +81,13 @@ class Settings(BaseSettings):
         return data
 
     @field_validator(
-        "config_file", "env_file", "home_dir", "log_dir", "sequence_dir",
-        "waiting_room_dir", "spinapi_library",
+        "config_file",
+        "env_file",
+        "home_dir",
+        "log_dir",
+        "sequence_dir",
+        "waiting_room_dir",
+        "spinapi_library",
     )
     @classmethod
     def _expand_user(cls, path: Path | None) -> Path | None:
@@ -126,7 +134,9 @@ def load_settings(argv: list[str] | None = None) -> Settings:
         argv = sys.argv[1:]
 
     # First pass without files: find out which env file and config file to read.
-    locations = Settings(_cli_settings_source=CliSettingsSource(Settings, cli_parse_args=argv))
+    locations = Settings(
+        _cli_settings_source=CliSettingsSource(Settings, cli_parse_args=argv)
+    )
 
     class _Settings(Settings):
         model_config = SettingsConfigDict(

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -61,7 +61,7 @@ class MockCam(Sensor, sensor_types=("MockCam",)):
         passes since there is no device to open.
         """
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         Sends tigger signal to synchroniser if there is one.
         Returns an array of shape ``[number_measrurements, height, witdh]``

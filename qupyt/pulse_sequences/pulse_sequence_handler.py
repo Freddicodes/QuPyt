@@ -6,7 +6,7 @@ By reading the parameters passed through the instructions file
 import importlib.util
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Optional, Protocol, cast
+from typing import Any, Protocol, cast
 
 from qupyt.config import get_settings
 
@@ -43,7 +43,7 @@ def _load_module_from_path(path: Path) -> ModuleType:
     return module
 
 
-def write_user_ps(path: Path, params: dict[str, Any]) -> Optional[dict[str, Any]]:
+def write_user_ps(path: Path, params: dict[str, Any]) -> dict[str, Any] | None:
     """
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
@@ -59,7 +59,7 @@ def write_user_ps(path: Path, params: dict[str, Any]) -> Optional[dict[str, Any]
 
 
 def update_params_dict(
-    params: dict[str, Any], update_params: Optional[dict[str, Any]]
+    params: dict[str, Any], update_params: dict[str, Any] | None
 ) -> dict[str, Any]:
     """
     Update the parameters dictonary. This is done via recursion to reach

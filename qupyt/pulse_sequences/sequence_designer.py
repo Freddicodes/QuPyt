@@ -177,7 +177,7 @@ class PulseSequence:
             )
             print(
                 colored(
-                    "WARNING! {} comp. to {}".format(points, int(round(points))).ljust(
+                    f"WARNING! {points} comp. to {int(round(points))}".ljust(
                         65, "."
                     )
                     + "! [WARNING]",

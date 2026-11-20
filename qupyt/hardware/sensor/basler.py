@@ -1,8 +1,9 @@
 import logging
 from time import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
 
@@ -102,7 +103,7 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
         self.cam.PixelFormat.SetValue("Mono12")
         self.cam.ExposureMode.SetValue("Timed")
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         See :meth:`Sensor.acquire_data`.
         """
@@ -113,7 +114,7 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
             synchroniser.trigger()
         for i in range(self.number_measurements):
             grab_result = self.cam.RetrieveResult(
-                int(5000), self._pylon.TimeoutHandling_ThrowException
+                5000, self._pylon.TimeoutHandling_ThrowException
             )
             frame = np.asarray(grab_result.Array)
             arr[i] = frame
@@ -186,24 +187,14 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
             self._set_roi_offset_x_and_y(roi_offset_x_and_y)
             self.roi_shape = roi_shape_h_and_w
             logger.info(
-                "Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(65, ".")
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
                 + "[done]"
             )
         except Exception as exc:
             logger.exception(
-                "Failed to set roi of height: {} and width {}\n\
-                               with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(65, ".")
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width {roi_shape_h_and_w[1]}\n\
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
                 + "[failed]"
             )
             raise exc

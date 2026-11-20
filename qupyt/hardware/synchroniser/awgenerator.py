@@ -10,12 +10,12 @@ import yaml
 from termcolor import colored
 from tqdm import tqdm
 
+from qupyt.config import get_settings
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt.pulse_sequences.sequence_designer import (
     PulseSequenceYaml,
     parse_awg_flag,
 )
-from qupyt.config import get_settings
 from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_awg_limit

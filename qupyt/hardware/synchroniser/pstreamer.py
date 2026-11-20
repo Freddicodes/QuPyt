@@ -300,7 +300,9 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
 
             # reset the device - all outputs 0V
             self.pulser.reset()
-            self.pulser.constant(self._pulsestreamer.OutputState.ZERO())  # all outputs 0V
+            self.pulser.constant(
+                self._pulsestreamer.OutputState.ZERO()
+            )  # all outputs 0V
             final = self._pulsestreamer.OutputState.ZERO()
 
             # Start the sequence after the upload and disable

@@ -1,8 +1,9 @@
 import logging
 from time import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
 from qupyt.utils.imports import install_hint
 
 from .base import Sensor
@@ -103,11 +104,13 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             res = self.he_sys.Acquire()
         for key, value in self.settings.items():
             setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
+        self.he_sys.AllocCamData(
+            1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0
+        )
         self.he_sys.SetTimeout(10000)
         logger.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         Reads frames from the camera and reshuffels from the
         heliCam specific format to the structure

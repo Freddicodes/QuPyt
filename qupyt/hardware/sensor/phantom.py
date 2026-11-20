@@ -1,9 +1,10 @@
 import ctypes
 import gc
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
 
@@ -11,6 +12,7 @@ from .base import Sensor
 
 if TYPE_CHECKING:
     from egrabber import Buffer, EGrabber
+
     from qupyt.hardware.synchroniser.base import Synchroniser
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,9 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
     """
 
     def __init__(self, configuration: dict[str, Any]) -> None:
-        with install_hint(vendor="Install the eGrabber SDK and its Python package from Euresys."):
+        with install_hint(
+            vendor="Install the eGrabber SDK and its Python package from Euresys."
+        ):
             import egrabber
 
         self._egrabber = egrabber
@@ -160,7 +164,7 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
             logger.warning(
                 f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n"
-                + f"does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
+                + "does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
                     65, "."
                 )
                 + "[warning]"
@@ -215,7 +219,7 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
             )
             raise exc
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         See :meth:`Sensor.acquire_data`.
         """
@@ -249,10 +253,20 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
-        buffer_ptr = buffer.get_info(self._egrabber.BUFFER_INFO_BASE, self._egrabber.INFO_DATATYPE_PTR)
-        image_size = buffer.get_info(self._egrabber.BUFFER_INFO_CUSTOM_PART_SIZE, self._egrabber.INFO_DATATYPE_SIZET)
-        part_num = buffer.get_info(self._egrabber.BUFFER_INFO_CUSTOM_NUM_PARTS, self._egrabber.INFO_DATATYPE_SIZET)
-        time_stamp = buffer.get_info(self._egrabber.BUFFER_INFO_TIMESTAMP, self._egrabber.INFO_DATATYPE_UINT64)
+        buffer_ptr = buffer.get_info(
+            self._egrabber.BUFFER_INFO_BASE, self._egrabber.INFO_DATATYPE_PTR
+        )
+        image_size = buffer.get_info(
+            self._egrabber.BUFFER_INFO_CUSTOM_PART_SIZE,
+            self._egrabber.INFO_DATATYPE_SIZET,
+        )
+        part_num = buffer.get_info(
+            self._egrabber.BUFFER_INFO_CUSTOM_NUM_PARTS,
+            self._egrabber.INFO_DATATYPE_SIZET,
+        )
+        time_stamp = buffer.get_info(
+            self._egrabber.BUFFER_INFO_TIMESTAMP, self._egrabber.INFO_DATATYPE_UINT64
+        )
 
         return buffer_ptr, image_size, part_num, time_stamp
 

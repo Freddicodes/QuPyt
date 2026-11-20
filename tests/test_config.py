@@ -33,7 +33,9 @@ def test_precedence(isolated, monkeypatch):
     (isolated / "config.toml").write_text(
         'log_level = "DEBUG"\nhome_dir = "/toml"\nlog_dir = "/toml-log"\nspinapi_library = "/toml.so"\n'
     )
-    (isolated / ".env").write_text("QUPYT_LOG_LEVEL=WARNING\nQUPYT_HOME_DIR=/dotenv\nQUPYT_LOG_DIR=/dotenv-log\n")
+    (isolated / ".env").write_text(
+        "QUPYT_LOG_LEVEL=WARNING\nQUPYT_HOME_DIR=/dotenv\nQUPYT_LOG_DIR=/dotenv-log\n"
+    )
     monkeypatch.setenv("QUPYT_LOG_LEVEL", "ERROR")
     monkeypatch.setenv("QUPYT_HOME_DIR", "/env")
 
@@ -46,7 +48,9 @@ def test_precedence(isolated, monkeypatch):
 
 
 def test_directories_follow_home_dir(isolated):
-    (isolated / "config.toml").write_text('home_dir = "/data/qupyt"\nlog_dir = "/var/log/qupyt"\n')
+    (isolated / "config.toml").write_text(
+        'home_dir = "/data/qupyt"\nlog_dir = "/var/log/qupyt"\n'
+    )
     settings = load_settings([])
     assert settings.sequence_dir == Path("/data/qupyt/sequences")
     assert settings.waiting_room_dir == Path("/data/qupyt/waiting_room")

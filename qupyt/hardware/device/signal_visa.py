@@ -29,7 +29,7 @@ class PhaseMixin:
         phase_command = self.command.get(f"SetPhase{channel}")
         if phase_command is None:
             raise ValueError(
-                f"The configured signal source {repr(self)} currently does not implement setting a phase."
+                f"The configured signal source {self!r} currently does not implement setting a phase."
             )
         self.instance.write(phase_command + str(phase))
         # self.opc_wait()

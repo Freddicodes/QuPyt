@@ -7,8 +7,8 @@ from typing import Any
 import yaml
 from termcolor import colored
 
-from qupyt.pulse_sequences.sequence_designer import PulseBlasterSequence
 from qupyt.config import get_settings
+from qupyt.pulse_sequences.sequence_designer import PulseBlasterSequence
 from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
@@ -82,7 +82,9 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         minimum instruction clock cycle and PB channel connections.
 
         """
-        with install_hint(vendor="Install SpinAPI from SpinCore or set SPINAPI_LIBRARY to the library path."):
+        with install_hint(
+            vendor="Install SpinAPI from SpinCore or set SPINAPI_LIBRARY to the library path."
+        ):
             import qupyt.hardware.wrappers.spinapi_adapted as spapi
 
         self._spapi = spapi
@@ -309,7 +311,10 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
                 self.error_catcher(status)
 
         status = self._spapi.pb_inst_pbonly(
-            0, self._spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * self._spapi.us
+            0,
+            self._spapi.Inst.STOP,
+            0,
+            self.pb_min_instr_clk_cycles * t_min * self._spapi.us,
         )
         self.error_catcher(status)
 

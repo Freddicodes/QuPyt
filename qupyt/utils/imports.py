@@ -30,4 +30,6 @@ def install_hint(extra: str | None = None, vendor: str | None = None) -> Iterato
             how = f"Install it with: pip install qupyt[{extra}]"
         else:
             how = vendor or ""
-        raise ImportError(f"{missing} is missing. {how}".strip(), name=exc.name) from exc
+        raise ImportError(
+            f"{missing} is missing. {how}".strip(), name=exc.name
+        ) from exc

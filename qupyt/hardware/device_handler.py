@@ -100,7 +100,7 @@ class DeviceHandler:
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 logger.info(
-                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
+                    f"Added {self.devices[key]['device']!r} to active devices dict".ljust(
                         65, "."
                     )
                     + "[done]"
@@ -108,7 +108,7 @@ class DeviceHandler:
             else:
                 self.devices[key]["config"] = value["config"]
                 logger.info(
-                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
+                    f"Updated {self.devices[key]['device']!r} in active devices dict".ljust(
                         65, "."
                     )
                     + "[done]"
@@ -194,7 +194,7 @@ class DynamicDeviceHandler(DeviceHandler):
                 self.devices[key]["device"] = device
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
                 logger.info(
-                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
+                    f"Added {self.devices[key]['device']!r} to active devices dict".ljust(
                         65, "."
                     )
                     + "[done]"
@@ -202,7 +202,7 @@ class DynamicDeviceHandler(DeviceHandler):
             else:
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
                 logger.info(
-                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
+                    f"Updated {self.devices[key]['device']!r} in active devices dict".ljust(
                         65, "."
                     )
                     + "[done]"

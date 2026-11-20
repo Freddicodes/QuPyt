@@ -1,9 +1,10 @@
 import logging
 import sys
 import traceback
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
 from qupyt.utils.imports import install_hint
 
 from .base import Sensor
@@ -128,7 +129,9 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         read_start_trig = self.daq_task.triggers.start_trigger
         # Configures the task to start acquiring samples
         # on the active edge of a digital signal.
-        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, self._nidaqmx.constants.Edge.RISING)
+        read_start_trig.cfg_dig_edge_start_trig(
+            self.daq_start_trig, self._nidaqmx.constants.Edge.RISING
+        )
 
     def _configure_sample_clock(self) -> None:
         # Configure sample clock : Sets the clock source, the clock rate,
@@ -142,7 +145,7 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
             self.NsampsPerDAQread,
         )
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
         Reads all samples at onec from the configure sensor.
 

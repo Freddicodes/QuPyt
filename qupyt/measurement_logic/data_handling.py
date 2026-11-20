@@ -226,5 +226,5 @@ class Data(ConfigurationMixin):
             source_data = self.data
         if average_count is not None and average_count > 0:
             np.save(filename, source_data / average_count)
-            return None
+            return
         np.save(filename, source_data)

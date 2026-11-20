@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 from numpy.typing import DTypeLike

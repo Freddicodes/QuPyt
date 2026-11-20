@@ -8,7 +8,6 @@ dictionary for each device.
 import logging
 from time import sleep
 
-
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
 
@@ -73,16 +72,7 @@ class VisaObject:
                 "OPC": "*OPC?",
             }
 
-        elif self.s_type == "SMB":
-            self.command = {
-                "SetAmpl1": "POW ",
-                "GetAmpl1": "POW?",
-                "SetFreq1": "FREQ ",
-                "GetFreq1": "FREQ?",
-                "OPC": "*OPC?",
-            }
-
-        elif self.s_type == "SMA":
+        elif self.s_type == "SMB" or self.s_type == "SMA":
             self.command = {
                 "SetAmpl1": "POW ",
                 "GetAmpl1": "POW?",

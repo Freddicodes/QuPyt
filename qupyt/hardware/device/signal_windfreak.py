@@ -4,8 +4,8 @@ from typing import Any
 from pydantic import validate_call
 
 from qupyt.utils.decorators import coerce_device_config_shape, loop_inputs
-from qupyt.utils.types import ChannelValue, ParameterInput
 from qupyt.utils.imports import install_hint
+from qupyt.utils.types import ChannelValue, ParameterInput
 
 from .signal_source import SignalSource
 

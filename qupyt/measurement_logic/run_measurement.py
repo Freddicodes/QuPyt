@@ -9,14 +9,14 @@ from time import sleep
 from typing import Any
 
 import yaml
-from qupyt._version import __version__ as qupyt_version
 from tqdm import tqdm
 
+from qupyt._version import __version__ as qupyt_version
+from qupyt.config import get_settings
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.hardware.sensor import Sensor
 from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.measurement_logic.data_handling import Data
-from qupyt.config import get_settings
 
 
 def _as_bool(value: Any) -> bool:

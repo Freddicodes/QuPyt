@@ -3,7 +3,7 @@ Generation of yaml file based pulse sequences.
 """
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import yaml
@@ -37,7 +37,7 @@ class YamlSequence:
                 self.pulse_sequence[sequence_block][pulse_channel] = {}
                 self.counter[sequence_block][pulse_channel] = 1
             self.pulse_sequence[sequence_block][pulse_channel][
-                "pulse{}".format(self.counter[sequence_block][pulse_channel])
+                f"pulse{self.counter[sequence_block][pulse_channel]}"
             ] = {
                 "start": start,
                 "duration": duration,
@@ -170,7 +170,7 @@ class ComplexSequence:
                 phi_ud = (np.pi * (N - 2) / 2) / (((N - 2) / 2) + 1)
             else:
                 raise ValueError(
-                    f"Invalid ud length. The value has to be even and four or higher."
+                    "Invalid ud length. The value has to be even and four or higher."
                 )
 
             # Generate quadratic phases
@@ -182,10 +182,9 @@ class ComplexSequence:
             raise ValueError(f"Unsupported sequence family: {seq_type}")
 
         if phase_block is None:
-            raise RuntimeError(f"phase_block was not initialized.")
+            raise RuntimeError("phase_block was not initialized.")
 
         self.phases = initial_phase + list(phase_block) * n + final_phase
-        return None
 
     def write_sequence(self, start: float = 0) -> None:
         """Iterates over phases attibute and appends
@@ -291,15 +290,13 @@ class ArbitrarySequenceWriter:
 
     def prepare_sequence(
         self, seq_type: str, lock_scaling: float = 1.0
-    ) -> Optional[float]:
+    ) -> float | None:
         self.seq_type = seq_type
         supported_sequence_types = ["XY8", "DROID60", "LG4", "CPMG"]
         if seq_type not in supported_sequence_types:
             raise ValueError(
-                "Sequence type {} not supported.\
-                Currently only {} are supported".format(
-                    seq_type, supported_sequence_types
-                )
+                f"Sequence type {seq_type} not supported.\
+                Currently only {supported_sequence_types} are supported"
             )
 
         self.params = {}

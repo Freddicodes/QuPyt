@@ -6,6 +6,7 @@ of the hardware used.
 """
 
 import logging
+
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
 
@@ -75,14 +76,13 @@ def generate_sequence(params: dict):
     return backup_params
 
 
-
 def gen_odmr(
-        mw_duration: float,
-        laser_duration: float,
-        number_measurements: int,
-        readout_time: float,
-        max_framerate: float,
-        ps_step: int= 0
+    mw_duration: float,
+    laser_duration: float,
+    number_measurements: int,
+    readout_time: float,
+    max_framerate: float,
+    ps_step: int = 0,
 ) -> dict:
     """
     Implementation of the ESR pulsesequence.
@@ -101,9 +101,10 @@ def gen_odmr(
     # logical block of the pulse sequence to avoid playback errors.
     # We compute the time it takes to perform the measurement step,
     # and double the time needed to take into account the reference.
-    time_half = buffer_between_pulses * 3 + \
-        mw_duration + laser_duration + readout_and_repol_gap
-    time_half = max(time_half, 1/max_framerate * 1e6)
+    time_half = (
+        buffer_between_pulses * 3 + mw_duration + laser_duration + readout_and_repol_gap
+    )
+    time_half = max(time_half, 1 / max_framerate * 1e6)
     total_time = 2 * time_half
 
     esr = YamlSequence(duration=total_time)
@@ -116,17 +117,15 @@ def gen_odmr(
         buffer_between_pulses,  # Starting time of the pulse.
         mw_duration,  # Pulse duration.
         # This pulse appears in two sequence blocks.
-        sequence_blocks=['wait_loop', 'block_0']
+        sequence_blocks=["wait_loop", "block_0"],
     )
     # Write the pulses that appear in the microwave and referece section.
     for i in range(2):
         esr.add_pulse(
             "LASER",
-            i * time_half
-            + 2 * buffer_between_pulses
-            + mw_duration,
+            i * time_half + 2 * buffer_between_pulses + mw_duration,
             readout_time,
-            sequence_blocks=['wait_loop', 'block_0']
+            sequence_blocks=["wait_loop", "block_0"],
         )
         esr.add_pulse(
             "LASER",
@@ -135,24 +134,21 @@ def gen_odmr(
             + mw_duration
             + readout_time
             + readout_and_repol_gap,
-            laser_duration
-            - readout_time,
-            sequence_blocks=['wait_loop', 'block_0']
+            laser_duration - readout_time,
+            sequence_blocks=["wait_loop", "block_0"],
         )
         esr.add_pulse(
             "READ",
-            i * time_half
-            + buffer_between_pulses
-            + mw_duration,
+            i * time_half + buffer_between_pulses + mw_duration,
             read_trigger_duration,
-            sequence_blocks=['block_0']
+            sequence_blocks=["block_0"],
         )
     # Here we sequence the defined sequence blocks in the order and number
     # of repetitions we want them to be played during the measurement.
     # This defines the order of the pulse blocks.
-    esr.sequencing_order = ['wait_loop', 'block_0']
+    esr.sequencing_order = ["wait_loop", "block_0"]
     # This defines how often each block in the sequence gets repeated.
-    esr.sequencing_repeats = [1, int(number_measurements/2) + 10]
+    esr.sequencing_repeats = [1, int(number_measurements / 2) + 10]
     esr.write(ps_step)
     # you can return a dict here that added / updates the configuration file.
     # In case of using a camera you might want to return the readout_time here.
