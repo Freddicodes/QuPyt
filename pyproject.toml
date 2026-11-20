@@ -12,6 +12,7 @@ dependencies = [
     "numpy",
     "PyYAML",
     "pydantic",
+    "pydantic-settings>=2.16",
     "termcolor",
     "tqdm",
     "watchdog==7.1.0",
@@ -43,6 +44,7 @@ find = {}
 version_file = "qupyt/_version.py"
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 check_untyped_defs = true
 ignore_missing_imports = true
 warn_unused_configs = true

@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Optional, Protocol, cast
 
-from qupyt.set_up import get_seq_dir
+from qupyt.config import get_settings
 
 
 # pylint: disable=too-few-public-methods
@@ -48,7 +48,7 @@ def write_user_ps(path: Path, params: dict[str, Any]) -> Optional[dict[str, Any]
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
     """
-    sequence_dir = get_seq_dir()
+    sequence_dir = get_settings().sequence_dir
     previous_sequence_files = {
         sequence_file: sequence_file.stat().st_mtime_ns
         for sequence_file in sequence_dir.glob("sequence_*.yaml")

@@ -8,7 +8,7 @@ import yaml
 from termcolor import colored
 
 from qupyt.pulse_sequences.sequence_designer import PulseBlasterSequence
-from qupyt.set_up import get_seq_dir
+from qupyt.config import get_settings
 from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
@@ -109,7 +109,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         yaml_file = Path(ps_yaml_file)
         if not yaml_file.is_absolute():
-            yaml_file = get_seq_dir() / yaml_file
+            yaml_file = get_settings().sequence_dir / yaml_file
         with open(yaml_file, "r", encoding="utf-8") as file:
             # PulseBlaster also consumes the expanded program directly. Keep
             # Tek-only upload modes out of this path with a clear error.

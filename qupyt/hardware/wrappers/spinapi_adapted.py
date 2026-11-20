@@ -31,7 +31,8 @@
 
 The shared library is searched for in this order:
 
-1. The path in the ``SPINAPI_LIBRARY`` environment variable.
+1. The ``spinapi_library`` QuPyt setting (see :mod:`qupyt.config`), then the
+   path in the ``SPINAPI_LIBRARY`` environment variable.
 2. Windows: ``spinapi64`` and ``spinapi`` (DLL search path).
    Linux: ``libspinapi.so`` on the loader path, then the default
    ``make install`` location ``/opt/spinapi/lib/libspinapi.so``.
@@ -46,11 +47,16 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+from qupyt.config import get_settings
+
 # --- library loading --------------------------------------------------------
 
 
 def _library_candidates() -> list[str]:
     candidates: list[str] = []
+    configured = get_settings().spinapi_library
+    if configured is not None:
+        candidates.append(str(configured))
     env_path = os.environ.get("SPINAPI_LIBRARY")
     if env_path:
         candidates.append(env_path)

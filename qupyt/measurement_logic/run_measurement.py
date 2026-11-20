@@ -16,7 +16,7 @@ from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.hardware.sensor import Sensor
 from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.measurement_logic.data_handling import Data
-from qupyt.set_up import get_seq_dir
+from qupyt.config import get_settings
 
 
 def _as_bool(value: Any) -> bool:
@@ -58,7 +58,7 @@ def run_measurement(
             synchroniser.stop()
             if upload_to_synchroniser:
                 synchroniser.load_sequence(
-                    get_seq_dir() / f"sequence_{ps_itervalue}.yaml"
+                    get_settings().sequence_dir / f"sequence_{ps_itervalue}.yaml"
                 )
             else:
                 logging.info(

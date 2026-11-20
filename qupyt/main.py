@@ -2,7 +2,6 @@
 Main programm. Measurement loop is started from here.
 """
 
-import argparse
 import logging
 import os
 import platform
@@ -23,6 +22,7 @@ from watchdog.events import (
 )
 from watchdog.observers import Observer
 
+from qupyt.config import Settings, get_settings, load_settings, make_userdirs
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.hardware.sensor.base import Sensor
 from qupyt.hardware.synchroniser.base import Synchroniser
@@ -31,7 +31,6 @@ from qupyt.pulse_sequences.pulse_sequence_handler import (
     update_params_dict,
     write_user_ps,
 )
-from qupyt.set_up import get_home_dir, get_log_dir, get_waiting_room, make_userdirs
 
 logger = logging.getLogger(__name__)
 
@@ -61,41 +60,32 @@ Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y      
                                                                                                          
 """
 
-print("\nWelcome to")
-print(qupyt_logo_text)
 
-make_userdirs()
-parser = argparse.ArgumentParser(description="Start QuPyt measurement")
-parser.add_argument(
-    "--verbose", action="store_true", help="deactivate logger output to screen"
-)
-args = parser.parse_args()
-
-logfile = get_log_dir() / f"log_{date.today()}.log"
-handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
-if args.verbose:
-    handlers.append(logging.StreamHandler())
-logging.basicConfig(
-    handlers=handlers,
-    # filename='logfile.log',
-    format="%(levelname)s\t%(asctime)s %(message)s",
-    datefmt="%Y/%m/%d %I:%M:%S %p",
-    encoding="utf-8",
-    level=logging.INFO,
-    force=True,
-)
+def _configure_logging(settings: Settings) -> None:
+    logfile = settings.log_dir / f"log_{date.today()}.log"
+    handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
+    if settings.log_to_console:
+        handlers.append(logging.StreamHandler())
+    logging.basicConfig(
+        handlers=handlers,
+        format="%(levelname)s\t%(asctime)s %(message)s",
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+        encoding="utf-8",
+        level=settings.log_level,
+        force=True,
+    )
 
 queue: Queue[str]
 event_thread: threading.Event
 
 
 def _set_busy() -> None:
-    with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
+    with open(get_settings().home_dir / "status.txt", "w", encoding="utf-8") as file:
         file.write("busy")
 
 
 def _set_ready() -> None:
-    with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
+    with open(get_settings().home_dir / "status.txt", "w", encoding="utf-8") as file:
         file.write("ready")
 
 
@@ -308,7 +298,7 @@ def _get_observer_event_hanlder() -> WaitingRoomEventHandler:
 
 
 def _get_observer(event_handler: WaitingRoomEventHandler) -> Observer:
-    path = get_waiting_room()
+    path = get_settings().waiting_room_dir
     go_recursively = False
     my_observer = Observer()
     my_observer.schedule(event_handler, path, recursive=go_recursively)
@@ -319,6 +309,11 @@ def main() -> None:
     """
     Start the main measurement loop.
     """
+    settings = load_settings()
+    print("\nWelcome to")
+    print(qupyt_logo_text)
+    make_userdirs()
+    _configure_logging(settings)
     logger.info("Started Program")
     global event_thread
     event_thread = threading.Event()

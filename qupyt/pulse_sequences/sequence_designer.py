@@ -9,7 +9,7 @@ import numpy as np
 import yaml
 from termcolor import colored
 
-from qupyt.set_up import get_seq_dir
+from qupyt.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class PulseSequenceYaml:
         #  There is one analog channel per source but mulitple makers etc.
         awg_sources: list[int],
         samprate: float,  # = 5e9,
-        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
+        yaml_file: Path = get_settings().sequence_dir / "sequence_0.yaml",
     ) -> None:
         self.yaml_file = yaml_file
         self.awg_sources = awg_sources
@@ -257,7 +257,7 @@ class PulseSequence:
         hash4 = hash1 + hash2 + hash3
         finalhash = hashlib.sha1(hash4.encode("utf-8")).hexdigest()
 
-        file_dir = get_seq_dir()
+        file_dir = get_settings().sequence_dir
         np.savez(
             file_dir / name,
             final,
@@ -274,7 +274,7 @@ class PulseBlasterSequence:
     def __init__(
         self,
         channel_mapping: dict[str, Any],
-        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
+        yaml_file: Path = get_settings().sequence_dir / "sequence_0.yaml",
     ) -> None:
         self.event_times: list[float] = []
         self.event_durations: list[float] = []

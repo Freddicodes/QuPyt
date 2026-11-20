@@ -8,7 +8,7 @@ from typing import Any, Optional
 import numpy as np
 import yaml
 
-from qupyt import set_up
+from qupyt.config import get_settings
 
 
 class YamlSequence:
@@ -52,7 +52,7 @@ class YamlSequence:
         sequence_number_string = (
             "0" if sequence_number is None else str(sequence_number)
         )
-        file_path = set_up.get_seq_dir()
+        file_path = get_settings().sequence_dir
         file_name = f"sequence_{sequence_number_string}.yaml"
         self.pulse_sequence["sequencing_order"] = self.sequencing_order
         self.pulse_sequence["sequencing_repeats"] = self.sequencing_repeats

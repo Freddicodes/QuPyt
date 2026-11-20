@@ -15,7 +15,7 @@ from qupyt.pulse_sequences.sequence_designer import (
     PulseSequenceYaml,
     parse_awg_flag,
 )
-from qupyt.set_up import get_seq_dir
+from qupyt.config import get_settings
 from qupyt.utils.imports import install_hint
 
 from .base import Synchroniser, _validate_awg_limit
@@ -125,7 +125,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
             yaml_file=ps_yaml_file,
         )
         sequence_translator.translate_yaml_to_numeric_instructions()
-        self._load_sequence_block(get_seq_dir() / "sequence.npz")
+        self._load_sequence_block(get_settings().sequence_dir / "sequence.npz")
         self._get_logical_awg_steps()  # Validate cached flag metadata before upload.
         self._upload_waveforms()
         self._raise_on_awg_errors("waveform upload")
@@ -518,7 +518,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
     def _load_awg_sequence_options(self, ps_yaml_file: Path) -> dict[str, Any]:
         yaml_file = Path(ps_yaml_file)
         if not yaml_file.is_absolute():
-            yaml_file = get_seq_dir() / yaml_file
+            yaml_file = get_settings().sequence_dir / yaml_file
         with open(yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
         return {

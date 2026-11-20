@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import yaml
 
-from qupyt import set_up
+from qupyt.config import get_settings
 from qupyt.exceptions import PulseSequenceError
 from qupyt.utils.imports import install_hint
 
@@ -237,7 +237,7 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         """
         try:
             # Selected folder:
-            self.yaml_file = set_up.get_seq_dir() / ps_yaml_file
+            self.yaml_file = get_settings().sequence_dir / ps_yaml_file
             with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
             # PulseStreamer consumes the expanded pulse program directly; it

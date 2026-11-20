@@ -1,0 +1,33 @@
+# Example QuPyt configuration.
+#
+# Copy this file to ~/.qupyt/config.toml (or pass --config-file <path>) and
+# uncomment the settings you want to change. The values shown are the defaults.
+#
+# Every setting can also be given as an environment variable with the QUPYT_
+# prefix (e.g. QUPYT_LOG_LEVEL=DEBUG), in a .env file in the working directory,
+# or on the command line (e.g. qupyt --log-level DEBUG). The command line wins
+# over the environment, the environment over .env, and .env over this file.
+# Run `qupyt --help` for the full list.
+#
+# On Windows use single quotes for paths, so backslashes are kept as they are:
+#   home_dir = 'C:\Users\me\qupyt'
+
+# QuPyt user directory. The three directories below default to subdirectories
+# of it, so setting home_dir alone moves all of them.
+# home_dir = "~/.qupyt"
+
+# Log files, generated pulse sequences, and the measurement YAML files QuPyt
+# watches for and runs.
+# log_dir = "~/.qupyt/log"
+# sequence_dir = "~/.qupyt/sequences"
+# waiting_room_dir = "~/.qupyt/waiting_room"
+
+# One of DEBUG, INFO, WARNING, ERROR.
+# log_level = "INFO"
+
+# Also print log messages to the console (same as qupyt --verbose).
+# log_to_console = false
+
+# SpinCore SpinAPI library for the PulseBlaster. Only needed if it is not
+# found automatically, e.g.:
+# spinapi_library = "/opt/spincore/lib/libspinapi.so"
