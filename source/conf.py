@@ -33,4 +33,3 @@ html_extra_path = ["example_configs/"]
 # html_theme = 'alabaster'
 html_theme = "sphinx_rtd_theme"
 # html_theme = 'furo'
-html_static_path = ["_static"]
