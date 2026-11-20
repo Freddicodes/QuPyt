@@ -12,7 +12,6 @@ from datetime import date
 from pathlib import Path
 from queue import Empty, Queue
 from time import sleep
-from typing import Optional
 
 import yaml
 from watchdog.events import (
@@ -78,6 +77,7 @@ def _configure_logging(settings: Settings) -> None:
 
 queue: Queue[str]
 event_thread: threading.Event
+stop: threading.Event
 
 
 def _set_busy() -> None:
@@ -94,12 +94,12 @@ def parse_input() -> None:
     static_devices = DeviceHandler({})
     dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
     processed_files = set()  # track files already picked from the queue
-    while True:
+    while not stop.is_set():
         if queue.empty():
             static_devices.update_devices({})
             dynamic_devices.update_devices({})
             _set_ready()
-            event_thread.wait()
+            event_thread.wait(timeout=0.5)
             continue
         try:
             _set_busy()
@@ -318,6 +318,8 @@ def main() -> None:
     logger.info("Started Program")
     global event_thread
     event_thread = threading.Event()
+    global stop
+    stop = threading.Event()
     global queue
     queue = Queue()
     event_handler = _get_observer_event_hanlder()
@@ -329,10 +331,11 @@ def main() -> None:
         while True:
             sleep(0.5)
     except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        stop.set()
         observer.stop()
         observer.join()
         thread.join()
-        queue.join()
 
 
 if __name__ == "__main__":
