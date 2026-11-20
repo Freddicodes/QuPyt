@@ -18,6 +18,8 @@ from qupyt.hardware.sensor import Sensor
 from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.measurement_logic.data_handling import Data
 
+logger = logging.getLogger(__name__)
+
 
 def _as_bool(value: Any) -> bool:
     if isinstance(value, bool):
@@ -61,7 +63,7 @@ def run_measurement(
                     get_settings().sequence_dir / f"sequence_{ps_itervalue}.yaml"
                 )
             else:
-                logging.info(
+                logger.info(
                     "Skipped synchroniser sequence upload".ljust(65, ".") + "[done]"
                 )
             synchroniser.run()
@@ -86,12 +88,19 @@ def run_measurement(
         return_status = "success"
     except Exception as e:
         print(f"exc {e}")
-        logging.exception("An error occured during the measurement!")
+        logger.exception("An error occured during the measurement!")
         return_status = "failed"
     finally:
-        sensor.close()
-        synchroniser.close()
-        print("sensor closed")
+        try:
+            sensor.close()
+        except Exception:
+            logger.exception("Failed to close the sensor connection")
+
+        try:
+            synchroniser.close()
+        except Exception:
+            logger.exception("Failed to close the synchroniser connection")
+
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
         if return_status == "success":
