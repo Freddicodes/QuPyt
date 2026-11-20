@@ -5,7 +5,7 @@ import numpy as np
 from .base import Sensor
 
 if TYPE_CHECKING:
-    from qupyt.hardware.base import Synchroniser
+    from qupyt.hardware.synchroniser.base import Synchroniser
 
 
 class MockCam(Sensor, sensor_types=("MockCam",)):
