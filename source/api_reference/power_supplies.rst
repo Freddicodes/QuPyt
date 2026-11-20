@@ -1,10 +1,15 @@
 QuPyt Power Supplies
 ====================
 
-.. automodule:: qupyt.hardware.power_supplies
+Power Supplies
+--------------
+
+.. automodule:: qupyt.hardware.device.power_supply
    :members:
    :show-inheritance:
 
+Class Hierarchy
+---------------
 
-
-.. inheritance-diagram:: qupyt.hardware.power_supplies
+.. inheritance-diagram:: qupyt.hardware.device.power_supply
+   :parts: 1

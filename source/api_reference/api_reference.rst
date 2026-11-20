@@ -11,6 +11,7 @@ Here you will find documentation on how to use the different classes.
    sensors
    synchronisers
    visa_handler
+   devices
    signal_sources
    device_handler
    power_supplies
