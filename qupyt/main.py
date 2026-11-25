@@ -309,6 +309,22 @@ def _get_observer(event_handler: WaitingRoomEventHandler) -> Observer:
     return my_observer
 
 
+def _queue_leftover_files(waiting_room: Path) -> None:
+    """
+    Handle files left in the waiting room by a previous session: mark
+    interrupted runs (``*_running_*``) as failed and queue pending YAML
+    files, oldest first.
+    """
+    for running_file in waiting_room.glob("*_running_*"):
+        failed_file = running_file.with_name(
+            running_file.name.replace("_running_", "_failed_", 1)
+        )
+        os.replace(running_file, failed_file)
+        logger.warning(f"Interrupted run {running_file.name} marked as failed.")
+    for yaml_file in sorted(waiting_room.glob("*.yaml"), key=os.path.getmtime):
+        queue.put(str(yaml_file))
+
+
 def main() -> None:
     """
     Start the main measurement loop.
@@ -329,6 +345,7 @@ def main() -> None:
     observer = _get_observer(event_handler)
     thread = threading.Thread(target=parse_input)
     observer.start()
+    _queue_leftover_files(settings.waiting_room_dir)
     thread.start()
     try:
         while True:
