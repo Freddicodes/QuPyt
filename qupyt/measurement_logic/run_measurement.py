@@ -33,6 +33,25 @@ def _as_bool(value: Any) -> bool:
     return bool(value)
 
 
+def __check_average_is_divisible_by_chunks(save_in_chunks: int, averages: int) -> None:
+    """
+    Raise if chunked saving would split averages across dynamic steps.
+
+    A chunk is saved every ``save_in_chunks`` averages, counted by the
+    average index, which restarts at 0 for every dynamic step. If
+    ``averages`` is not a multiple of ``save_in_chunks``, the leftover
+    averages of one step end up in the next step's chunk (and are still
+    divided by ``save_in_chunks``), and the last partial chunk is never
+    saved. ``save_in_chunks == 0`` disables chunking and is always valid.
+    """
+    if save_in_chunks and averages % save_in_chunks != 0:
+        raise ValueError(
+            f"averages ({averages}) must be divisible by "
+            f"data.save_in_chunks ({save_in_chunks}), otherwise chunks mix "
+            "dynamic steps and the last partial chunk is lost."
+        )
+
+
 def run_measurement(
     static_devices: DeviceHandler,
     dynamic_devices: DynamicDeviceHandler,
@@ -54,6 +73,10 @@ def run_measurement(
         data_container.create_array()
         params["filename"] = params["experiment_type"] + "_" + mid
         data_container.set_filename((params["experiment_type"], mid))
+        save_in_chunks = data_container.save_in_chunks
+        __check_average_is_divisible_by_chunks(
+            save_in_chunks=save_in_chunks, averages=int(params["averages"])
+        )
 
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             synchroniser.open()
