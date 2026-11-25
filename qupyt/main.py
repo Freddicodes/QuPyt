@@ -227,7 +227,8 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         else:  # macOS or other
             self.on_created = self._on_created
             self.on_modified = self._on_modified
-            self.on_moved = self._on_moved
+        # A rename into the waiting room emits only a moved event.
+        self.on_moved = self._on_moved
 
     def _on_closed(self, event: FileClosedEvent) -> None:
         """
@@ -275,12 +276,16 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         Handle the event when a monitored file is moved.
 
         This method is called when a file matching the specified patterns is moved.
-        It puts the file path in a queue, waits briefly, and triggers the event thread.
+        It puts the destination path in a queue if it is a YAML file (e.g. an atomic
+        write renaming ``job.tmp`` to ``job.yaml``), waits briefly, and triggers the
+        event thread. Moves away from a YAML name (e.g. to ``*_running_*``) are ignored.
 
         Args:
-            event: The event object containing information about the modified file.
+            event: The event object containing information about the moved file.
         """
-        queue.put(event.src_path)
+        if Path(event.dest_path).suffix != ".yaml":
+            return
+        queue.put(event.dest_path)
         sleep(0.1)
         event_thread.set()
 
