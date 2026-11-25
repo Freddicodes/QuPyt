@@ -30,6 +30,7 @@ from qupyt.pulse_sequences.pulse_sequence_handler import (
     update_params_dict,
     write_user_ps,
 )
+from qupyt.utils.logging import INFO, START, StatusFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +62,26 @@ Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y      
 
 
 def _configure_logging(settings: Settings) -> None:
-    logfile = settings.log_dir / f"log_{date.today()}.log"
-    handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
+    logfile: Path = settings.log_dir / f"log_{date.today()}.log"
+    handlers: list[logging.Handler] = [logging.FileHandler(filename=logfile)]
+
+    # add logging to console
     if settings.log_to_console:
         handlers.append(logging.StreamHandler())
+
+    # add special formatter that allows logging with left justified formatting
+    # from qupyt.utils.logging import FAILED, DONE, START, ...
+    # called as: logger.info("<msg>", extr=FAILED)
+    formatter: StatusFormatter = StatusFormatter(
+        fmt="%(levelname)s\t%(asctime)s %(message)s", datefmt="%Y/%m/%d %I:%M:%S %p"
+    )
+
+    # register formatter to all handlers for consistent formatting
+    for h in handlers:
+        h.setFormatter(fmt=formatter)
+
     logging.basicConfig(
         handlers=handlers,
-        format="%(levelname)s\t%(asctime)s %(message)s",
-        datefmt="%Y/%m/%d %I:%M:%S %p",
         encoding="utf-8",
         level=settings.log_level,
         force=True,
@@ -135,7 +148,7 @@ def parse_input() -> None:
                 # Already processed (duplicate event) or removed; skip
                 continue
 
-            logger.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
+            logger.info("STARTED NEW MEASUREMENT", extra=START)
 
             params = _read_instruction_file(instruction_path)
             if params is None:
@@ -306,6 +319,7 @@ def _get_observer(event_handler: WaitingRoomEventHandler) -> Observer:
     go_recursively = False
     my_observer = Observer()
     my_observer.schedule(event_handler, path, recursive=go_recursively)
+    logger.debug(msg=f"Waiting for files in: {path}", extra=INFO)
     return my_observer
 
 

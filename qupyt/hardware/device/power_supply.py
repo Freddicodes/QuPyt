@@ -11,6 +11,7 @@ from abc import abstractmethod
 from typing import Any
 
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE
 
 from .base import Device
 
@@ -76,7 +77,7 @@ class KonradKD300060000(PowerSupply, device_types=("KonradKD3000", "KonradKD6000
         except ValueError, serial.SerialException:
             logger.exception("Connection to power supply %s failed", address)
             raise
-        logger.info(f"Connected to power supply {address}".ljust(65, ".") + "[done]")
+        logger.info(f"Connected to power supply {address}", extra=DONE)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__} (address: {self.address})"

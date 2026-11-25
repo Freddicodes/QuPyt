@@ -8,6 +8,7 @@ from qupyt.utils.decorators import (
     coerce_device_config_shape,
     loop_inputs,
 )
+from qupyt.utils.logging import DONE
 from qupyt.utils.types import ParameterInput
 
 from .signal_source import SignalSource
@@ -37,7 +38,7 @@ class MockSignalSource(
         channel, freq = freq
         sleep(0.1)
         logger.info(
-            f"MOCKING! -> set frequency channel {channel} to".ljust(65, ".") + f"{freq}"
+            f"MOCKING! -> set frequency channel {channel} to {freq}", extra=DONE
         )
 
     @validate_call
@@ -47,7 +48,7 @@ class MockSignalSource(
         channel, ampl = ampl
         sleep(0.1)
         logger.info(
-            f"MOCKING! -> set amplitued channel {channel} to".ljust(65, ".") + f"{ampl}"
+            f"MOCKING! -> set amplitued channel {channel} to {ampl}", extra=DONE
         )
 
     @validate_call
@@ -56,9 +57,7 @@ class MockSignalSource(
     def set_phase(self, phase: ParameterInput) -> None:
         channel, phase = phase
         sleep(0.1)
-        logger.info(
-            f"MOCKING! -> set phase channel {channel} to".ljust(65, ".") + f"{phase}"
-        )
+        logger.info(f"MOCKING! -> set phase channel {channel} to {phase}", extra=DONE)
 
     def close(self) -> None:
         pass

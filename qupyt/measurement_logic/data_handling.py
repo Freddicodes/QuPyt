@@ -5,6 +5,7 @@ import numpy as np
 
 from qupyt.hardware.sensor import Sensor
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
+from qupyt.utils.logging import DONE, FAILED
 
 
 class Data(ConfigurationMixin):
@@ -122,15 +123,11 @@ class Data(ConfigurationMixin):
             ]
         else:
             logging.info(
-                f"Failed to crearte dara array for mode {self.averaging_mode}".ljust(
-                    65, "."
-                )
-                + "[failed]"
+                f"Failed to crearte dara array for mode {self.averaging_mode}",
+                extra=FAILED,
             )
             raise ValueError(f"averaging_mode {self.averaging_mode} not available")
-        logging.info(
-            f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
-        )
+        logging.info(f"Created data array of shape {data_array_dim}", extra=DONE)
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
         self.chunk_data = np.zeros_like(self.data)
 

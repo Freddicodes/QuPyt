@@ -7,7 +7,6 @@ from typing import Any, Self
 
 import numpy as np
 import yaml
-from termcolor import colored
 from tqdm import tqdm
 
 from qupyt.config import get_settings
@@ -17,6 +16,7 @@ from qupyt.pulse_sequences.sequence_designer import (
     parse_awg_flag,
 )
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE
 
 from .base import Synchroniser, _validate_awg_limit
 
@@ -99,17 +99,17 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
 
     def run(self) -> None:
         self.instance.write("awgcontrol:run:immediate")
-        logger.info("Turned on AWG output to RUN immediate".ljust(65, ".") + "[done]")
+        logger.info("Turned on AWG output to RUN immediate", extra=DONE)
         self.opc_wait()
 
     def stop(self) -> None:
         self.instance.write("awgcontrol:stop:immediate")
-        logger.info("Turned on AWG output to STOP immediate".ljust(65, ".") + "[done]")
+        logger.info("Turned on AWG output to STOP immediate", extra=DONE)
         self.opc_wait()
 
     def trigger(self) -> None:
         self.instance.write("trigger:immediate atrigger")
-        logger.info("Sent trigger to AWG".ljust(65, ".") + "[done]")
+        logger.info("Sent trigger to AWG", extra=DONE)
 
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         self._limit_channels_to_available_outputs()
@@ -131,9 +131,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         self._raise_on_awg_errors("waveform upload")
         self._sequence("autoseq", nongatereps=1)
         self._raise_on_awg_errors("sequencer construction")
-        logger.info(
-            "Loaded and sequenced current pulse sequence".ljust(65, ".") + "[done]"
-        )
+        logger.info("Loaded and sequenced current pulse sequence", extra=DONE)
         self.opc_wait()
 
     def _configure(self) -> None:
@@ -144,7 +142,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
             self._set_output_on(channel)
             for marker in self.marker_channels:
                 self._set_marker_amplitude(channel, marker, self.marker_amplitude)
-        print("\nConfiguring AWG".ljust(65, ".") + colored(" [done]", "green"))
+        logger.info("Configuring AWG", extra=DONE)
 
     def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
         self.instance.write('wlist:waveform:delete "' + wavename + '"')
@@ -159,7 +157,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
             waveform.astype(np.uint8)[1, :],
             datatype="B",
         )
-        logger.info(f"Uploaded waveform {wavename}".ljust(65, ".") + "[done]")
+        logger.info(f"Uploaded waveform {wavename}", extra=DONE)
         self.opc_wait()
 
     def _sequence(self, seqname: str, nongatereps: int = 1) -> None:
@@ -191,10 +189,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
                 f"the configured AWG limit of {self.awg_max_sequence_steps}. Enable "
                 "awg_sequence_mode: repeated_child or reduce the sequence."
             )
-        summary = f"Tek AWG sequence mode: flat\nLogical steps: {len(logical_steps)}"
-        print(summary)
         logger.info("Tek AWG sequence mode: flat; logical_steps=%s", len(logical_steps))
-        print("Setting up sequencer".ljust(65, "."), end="")
         # AWG70K sequence assets have one or more tracks. Each active AWG output
         # is assigned one track of the same sequence asset via SOURCE:CASS.
         tracks = len(self.channels)
@@ -227,7 +222,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         for track, channel in enumerate(self.channels, start=1):
             self.instance.write(f'SOURCE{channel}:CASS:SEQUENCE "{seqname}",{track}')
         self.opc_wait()
-        print(colored(" [done]", "green"))
+        logger.info("Setting up sequencer", extra=DONE)
 
     def _sequence_repeated_child(
         self,
@@ -243,18 +238,6 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         )
         compact_body_steps = len(prefix) + 1 + len(suffix)
         top_level_steps = 1 + compact_body_steps
-        summary = (
-            "Tek AWG sequence mode: repeated_child\n"
-            f"Expanded logical steps: {len(logical_steps)}\n"
-            f"Prefix steps: {len(prefix)}\n"
-            f"Child steps: {len(child)}\n"
-            f"Child repetitions: {repetitions}\n"
-            f"Suffix steps: {len(suffix)}\n"
-            f"Compact measurement steps: {compact_body_steps}\n"
-            f"Top-level steps: {top_level_steps}\n"
-            f"Unique waveforms: {len(set(self.wavenames))}"
-        )
-        print(summary)
         logger.info(
             "Tek AWG sequence mode: repeated_child; expanded_logical_steps=%s; "
             "prefix_steps=%s; child_steps=%s; child_repetitions=%s; "
@@ -269,7 +252,6 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
             top_level_steps,
             len(set(self.wavenames)),
         )
-        print("Setting up sequencer".ljust(65, "."), end="")
         # Keep waveform memory unchanged: the child is a sequence asset that
         # references already-uploaded waveforms, not a concatenated waveform.
         tracks = len(self.channels)
@@ -338,7 +320,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
                 f'SOURCE{channel}:CASS:SEQUENCE "{top_sequence}",{track}'
             )
         self.opc_wait()
-        print(colored(" [done]", "green"))
+        logger.info("Setting up sequencer", extra=DONE)
 
     def _configure_waveform_step(
         self,
@@ -555,12 +537,12 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         self.seqrepeats = list(block["arr_1"])
         self.wavenames = list(block["arr_2"])
         self.flag_values = pickle.loads(block["arr_5"])
-        logger.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
+        logger.info(f"loaded wave sequence from file {seqname}", extra=DONE)
 
     def _clear_awg(self) -> None:
         self.instance.write("slist:sequence:delete all")
         self.instance.write("wlist:waveform:delete all")
-        logger.info("Clear all AWG slist and wlist".ljust(65, ".") + "[done]")
+        logger.info("Clear all AWG slist and wlist", extra=DONE)
         self.opc_wait()
 
     def _upload_waveforms(self) -> None:
@@ -579,26 +561,22 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
                 )
                 self.opc_wait()
         logger.info(
-            f"Uploaded Tektronix AWG waveforms in {time() - time_1} seconds".ljust(
-                65, "."
-            )
-            + "[done]"
+            f"Uploaded Tektronix AWG waveforms in {time() - time_1} seconds", extra=DONE
         )
 
     def _set_output_on(self, channel: int) -> None:
         self.instance.write(f"outp{channel} on")
-        logger.info(f"Set channel{channel} output to on".ljust(65, ".") + "[done]")
+        logger.info(f"Set channel{channel} output to on", extra=DONE)
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
         self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
         logger.info(
-            f"Set AWG channel{channel} resolution to bit".ljust(65, ".")
-            + "{dac_resolution}"
+            f"Set AWG channel{channel} resolution to bit {dac_resolution}", extra=DONE
         )
 
     def _set_sampling_rate(self) -> None:
         self.instance.write(f"source:frequency {self.samprate}")
-        logger.info("AWG sampling rate".ljust(65, ".") + f"{self.samprate}")
+        logger.info(f"AWG sampling rate {self.samprate}", extra=DONE)
         self.opc_wait()
 
     def _set_marker_amplitude(
@@ -609,8 +587,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         )
         self.opc_wait()
         logger.info(
-            f"Set AWG channel{channel} marker{marker} to / V".ljust(65, ".")
-            + f"{voltage}"
+            f"Set AWG channel{channel} marker{marker} to / V {voltage}", extra=DONE
         )
 
     def _set_analog_amplitude(self, channel: int, amplitude: float = 1.0) -> None:
@@ -620,8 +597,7 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
         )
         self.opc_wait()
         logger.info(
-            f"Set AWG channel{channel} analog amplitude to".ljust(65, ".")
-            + f"{amplitude}"
+            f"Set AWG channel{channel} analog amplitude to {amplitude}", extra=DONE
         )
 
     def _set_device_type(self, device_type: str) -> None:
@@ -671,7 +647,6 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
                 f"{available_channels}, using {usable_channels}, "
                 f"idn={identity.strip()!r}."
             )
-            print(message)
             logger.warning(message)
             self.channels = usable_channels
 
@@ -730,7 +705,9 @@ class AWGenerator(VisaObject, Synchroniser, synchroniser_types=("TekAWG",)):
             'wlist:waveform:data? "' + wavename + '"'
         )
         markers = np.zeros((4, len(marker)))
-        print(np.shape(markers), np.shape(analog))
+        logger.debug(
+            "markers shape %s, analog shape %s", np.shape(markers), np.shape(analog)
+        )
         for i, mark in enumerate(marker):
             num = bin(mark)[2:]
             if not len(num) < 5:

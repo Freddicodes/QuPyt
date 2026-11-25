@@ -11,6 +11,7 @@ from time import time
 import numpy as np
 
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
             self.harvester.add_file(self.cti_file)
         except (FileNotFoundError, OSError) as err:
             logger.exception(
-                "Could not find GenTL producer file (.cti)".ljust(65, ".") + "[failed]"
+                "Could not find GenTL producer file (.cti)", extra=FAILED
             )
             logger.exception(f"Tried to locate file at {self.cti_file}")
             raise err
@@ -141,14 +142,12 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
             self.roi_shape = roi_shape_h_and_w
             logger.info(
                 f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
-                + "[done]"
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}", extra=DONE
             )
         except Exception as exc:
             logger.exception(
                 f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
-                + "[failed]"
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}", extra=FAILED
             )
             raise exc
 
@@ -170,7 +169,7 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
         self.cam.stop()
         time_2 = time()
         logger.info(
-            f"Data acquisition took {time_2 - time_1} s".ljust(65, ".") + "[done]"
+            f"Data acquisition took {time_2 - time_1} s", extra=DONE
         )
         return data.reshape((self.number_measurements, height, width))
 
@@ -188,4 +187,4 @@ class GenICamHarvester(Sensor, sensor_types=("EoSense1.1CXP",)):
         """
         self.cam.destroy()
         self.harvester.reset()
-        logger.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        logger.info("Closed GenICam camera connection", extra=DONE)

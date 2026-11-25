@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE
 
 from .base import Sensor
 
@@ -108,7 +109,7 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             1, self._heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0
         )
         self.he_sys.SetTimeout(10000)
-        logger.info("Heli C3 opened".ljust(65, ".") + "[done]")
+        logger.info("Heli C3 opened", extra=DONE)
 
     def acquire_data(self, synchroniser: Synchroniser | None = None) -> np.ndarray:
         """
@@ -123,9 +124,7 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
             synchroniser.trigger()
         res = self.he_sys.Acquire()
         if res < 0:
-            logger.warning(
-                "Your camera appears to have timed out".ljust(65, ",") + "[done]"
-            )
+            logger.warning("Your camera appears to have timed out", extra=DONE)
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
         img = self.he_sys.GetCamData(1, 0, self._heli.ct.byref(meta))
@@ -138,14 +137,11 @@ class HeliCam(Sensor, sensor_types=("HeliC3",)):
         return_frames[::2] = raw_frames[:, :, :, 0]
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
-        logger.info(
-            f"HeliCam C3 data acquisition took {time_2 - time_1} s".ljust(65, ".")
-            + "[done]"
-        )
+        logger.info(f"HeliCam C3 data acquisition took {time_2 - time_1} s", extra=DONE)
         return return_frames
 
     def close(self) -> None:
         """Closes the the camera.
         A new camera instance may now be created."""
         self.he_sys.Close()
-        logger.info("HeliCam C3 closed".ljust(65, ".") + "[done]")
+        logger.info("HeliCam C3 closed", extra=DONE)

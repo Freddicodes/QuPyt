@@ -6,14 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "qupyt"
 dynamic = ["version"]
 description = "Provide a framework for quantum sensing experiments"
-license = {text = "No license of for commercial or non-commercial use is granted"}
+# license = {text = "No license of for commercial or non-commercial use is granted"}
 requires-python = ">=3.14"
 dependencies = [
     "numpy",
     "PyYAML",
     "pydantic",
     "pydantic-settings>=2.16",
-    "termcolor",
     "tqdm",
     "watchdog==7.1.0",
 ]

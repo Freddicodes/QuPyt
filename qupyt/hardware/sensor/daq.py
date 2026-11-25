@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import FAILED
 
 from .base import Sensor
 
@@ -99,7 +100,7 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
             self._create_analog_input_channel()
             self._configure_sample_clock()
             self._configure_analog_input_trigger()
-            logger.info("DAQ opened and created read task".ljust(65, "."))
+            logger.info("DAQ opened and created read task")
         except Exception:
             self.close()
             logger.exception("An error occured while trying opening the DAQ")
@@ -157,14 +158,10 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
         try:
             samples = self.daq_task.read(self.NsampsPerDAQread, self.daq_timeout)
             self.daq_task.stop()
-        except Exception as excpt:
-            print(
-                """Error: could not read DAQ.
-                Please check your DAQ's connections.
-                Exception details:""",
-                type(excpt).__name__,
-                ".",
-                excpt,
+        except Exception:
+            logger.exception(
+                "Could not read DAQ. Please check your DAQ's connections.",
+                extra=FAILED,
             )
             sys.exit()
         return np.asarray(samples).reshape((len(samples), 1))
@@ -196,4 +193,4 @@ class DAQ(Sensor, sensor_types=("DAQ",)):
             # hide the original setup error with a secondary AttributeError.
             return
         self.daq_task.close()
-        logger.info("DAQ closed".ljust(65, "."))
+        logger.info("DAQ closed")

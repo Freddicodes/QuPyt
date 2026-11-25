@@ -10,6 +10,7 @@ from time import sleep
 
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +42,9 @@ class VisaObject:
             resource_manager = pyvisa.ResourceManager()
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
-            logger.info(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
-            )
+            logger.info(f"Opening {s_type} at adress {handle}", extra=DONE)
         except Exception:
-            logger.exception(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
-            )
+            logger.exception(f"Opening {s_type} at adress {handle}", extra=FAILED)
             resource_manager.close()
             resource_manager.visalib._registry.clear()
             raise
@@ -162,17 +159,13 @@ class VisaObject:
 
     def close(self) -> None:
         if self.s_type == "TekAWG":
-            print("Sleeping for 5 seconds in close to prevent TCPIP issues:")
+            logger.info("Sleeping for 5 seconds in close to prevent TCPIP issues")
             sleep(5)
         try:
             self.instance.close()
             self.instance.visalib._registry.clear()
-            logger.info(
-                f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
-                + "[done]"
-            )
+            logger.info(f"Closing {self.s_type} at adress {self.handle}", extra=DONE)
         except Exception:
             logger.exception(
-                "Closing {self.s_type} at adress {self.handle} failed".ljust(65, ".")
-                + "[failed]"
+                f"Closing {self.s_type} at adress {self.handle} failed", extra=FAILED
             )

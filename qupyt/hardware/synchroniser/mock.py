@@ -4,6 +4,7 @@ from typing import Any
 import yaml
 
 from qupyt.config import get_settings
+from qupyt.utils.logging import DONE
 
 from .awgenerator import AWGenerator
 from .base import (
@@ -29,7 +30,7 @@ class MockGenerator(Synchroniser, synchroniser_types=("MockSynchroniser",)):
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
-        logger.info("MockSynchroniser instance created".ljust(65, ".") + "[done]")
+        logger.info("MockSynchroniser instance created", extra=DONE)
 
     def __repr__(self) -> str:
         return f"MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
@@ -38,7 +39,7 @@ class MockGenerator(Synchroniser, synchroniser_types=("MockSynchroniser",)):
         return f"Synchronizer of type MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def open(self) -> None:
-        logger.info("Opened MockSynchroniser".ljust(65, ".") + "[done]")
+        logger.info("Opened MockSynchroniser", extra=DONE)
 
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         try:
@@ -67,9 +68,7 @@ class MockGenerator(Synchroniser, synchroniser_types=("MockSynchroniser",)):
             else:
                 self.total_duration = int(total_duration)
 
-            logger.info(
-                "Loaded sequence for MockSynchroniser".ljust(65, ".") + "[done]"
-            )
+            logger.info("Loaded sequence for MockSynchroniser", extra=DONE)
 
         except AttributeError:
             logger.exception(
@@ -129,15 +128,6 @@ class MockGenerator(Synchroniser, synchroniser_types=("MockSynchroniser",)):
         finally:
             self.sequence_options = previous_options
 
-        summary = (
-            "MockSynchroniser AWG sequence mode: repeated_child\n"
-            f"Expanded logical steps: {len(logical_steps)}\n"
-            f"Prefix steps: {len(prefix)}\n"
-            f"Child steps: {len(child)}\n"
-            f"Child repetitions: {repetitions}\n"
-            f"Suffix steps: {len(suffix)}"
-        )
-        print(summary)
         logger.info(
             "MockSynchroniser AWG sequence mode: repeated_child; "
             "expanded_logical_steps=%s; prefix_steps=%s; child_steps=%s; "
@@ -283,13 +273,13 @@ class MockGenerator(Synchroniser, synchroniser_types=("MockSynchroniser",)):
         return repetitions
 
     def run(self) -> None:
-        logger.info("Sent run to MockSynchroniser".ljust(65, ".") + "[done]")
+        logger.info("Sent run to MockSynchroniser", extra=DONE)
 
     def trigger(self) -> None:
-        logger.info("Sent trigger from MockSynchroniser".ljust(65, ".") + "[done]")
+        logger.info("Sent trigger from MockSynchroniser", extra=DONE)
 
     def stop(self) -> None:
-        logger.info("Stopped MockSynchroniser".ljust(65, ".") + "[done]")
+        logger.info("Stopped MockSynchroniser", extra=DONE)
 
     def close(self) -> None:
-        logger.info("Closed MockSynchroniser".ljust(65, ".") + "[done]")
+        logger.info("Closed MockSynchroniser", extra=DONE)

@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from termcolor import colored
 
 from qupyt.config import get_settings
 from qupyt.pulse_sequences.sequence_designer import PulseBlasterSequence
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
 
@@ -143,12 +143,12 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         # Returns a 0 on success or a negative number on an error.
         status = self._spapi.pb_start()
         self.error_catcher(status)
-        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
+        logger.info("Started execution of Pulseblaster card pulse program", extra=DONE)
 
     def trigger(self) -> None:
         status = self._spapi.pb_start()
         self.error_catcher(status)
-        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
+        logger.info("Started execution of Pulseblaster card pulse program", extra=DONE)
 
     def stop(self) -> None:
         """
@@ -158,7 +158,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         # Returns a 0 on success or a negative number on an error.
         status = self._spapi.pb_stop()
         self.error_catcher(status)
-        print(colored("Stopped execution of Pulseblaster card pulse program!", "green"))
+        logger.info("Stopped execution of Pulseblaster card pulse program", extra=DONE)
 
     def error_catcher(self, status: int) -> None:
         """
@@ -171,7 +171,9 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
             int status: current status of PB board
         """
         if status < 0:
-            print("Error: ", self._spapi.pb_get_error())
+            logger.error(
+                f"Pulseblaster error: {self._spapi.pb_get_error()}", extra=FAILED
+            )
             sys.exit()
 
     def configure_pb(self) -> None:
@@ -319,7 +321,7 @@ class PulseBlaster(Synchroniser, synchroniser_types=("PulseBlaster",)):
         self.error_catcher(status)
 
         self.stop_programming()
-        print(colored("Pulse sequence is loaded to Pulseblaster card!", "green"))
+        logger.info("Pulse sequence is loaded to Pulseblaster card", extra=DONE)
 
     def start_programming(self) -> None:
         """

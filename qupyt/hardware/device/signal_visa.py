@@ -6,6 +6,7 @@ from pydantic import validate_call
 from qupyt.exceptions import ConfigurationError
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt.utils.decorators import coerce_device_config_shape, loop_inputs
+from qupyt.utils.logging import DONE
 from qupyt.utils.types import ParameterInput
 
 from .signal_source import SignalSource
@@ -33,9 +34,7 @@ class PhaseMixin:
             )
         self.instance.write(phase_command + str(phase))
         # self.opc_wait()
-        logger.info(
-            f"{self.s_type} set phase channel {channel} to".ljust(65, ".") + f"{phase}"
-        )
+        logger.info(f"{self.s_type} set phase channel {channel} to {phase}", extra=DONE)
 
 
 class VisaSignalSource(VisaObject, SignalSource):
@@ -65,8 +64,7 @@ class VisaSignalSource(VisaObject, SignalSource):
         self.instance.write(self.command[f"SetAmpl{channel}"] + str(ampl))
         self.opc_wait()
         logger.info(
-            f"{self.s_type} set amplitude channel {channel} to".ljust(65, ".")
-            + f"{ampl}"
+            f"{self.s_type} set amplitude channel {channel} to {ampl}", extra=DONE
         )
 
     @validate_call
@@ -77,8 +75,7 @@ class VisaSignalSource(VisaObject, SignalSource):
         self.instance.write(self.command[f"SetFreq{channel}"] + str(freq))
         self.opc_wait()
         logger.info(
-            f"{self.s_type} set frequency channel {channel} to".ljust(65, ".")
-            + f"{freq}"
+            f"{self.s_type} set frequency channel {channel} to {freq}", extra=DONE
         )
 
 
@@ -194,10 +191,9 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin, device_types=("Rigol",)):
         self.opc_wait()
 
         logger.info(
-            f"{self.s_type} set triggered N-cycle burst channel {channel} to".ljust(
-                65, "."
-            )
-            + f"{n_cycles} cycles"
+            f"{self.s_type} set triggered N-cycle burst channel {channel} to "
+            f"{n_cycles} cycles",
+            extra=DONE,
         )
 
 
@@ -271,7 +267,7 @@ class SMAandSMBVisaSignalSource(VisaSignalSource, device_types=("SMA", "SMB")):
         self.opc_wait()
         self.instance.write("SOURce:FREQ:MODE LIST")
         self.opc_wait()
-        logger.info("%s[done]", "SMB or SMA set slist values.".ljust(65, "."))
+        logger.info("SMB or SMA set slist values.", extra=DONE)
 
 
 class TekAWGSignalSource(VisaSignalSource, device_types=("TekAWG",)):

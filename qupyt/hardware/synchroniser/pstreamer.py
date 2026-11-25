@@ -7,6 +7,7 @@ import yaml
 from qupyt.config import get_settings
 from qupyt.exceptions import PulseSequenceError
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED, WARNING
 
 from .base import Synchroniser, _validate_synchroniser_sequence_mode
 
@@ -37,13 +38,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
     def _find_pulse_streamers(self) -> None:
         devices = self._pulsestreamer.findPulseStreamers()
         if devices:
-            print("Detected PulseStreamer: ")
-            print(devices)
-            print("----------------------------------------------------\n")
+            logger.info(f"Detected PulseStreamer: {devices}", extra=DONE)
             self.address = devices[0][0]
         else:
-            print("No PulseStreamers found by autodetect.\n-------------------\n")
-            logger.info("Pulse Streamer not found".ljust(65, ".") + "[failed]")
+            logger.info("Pulse Streamer not found", extra=FAILED)
 
     def open(self) -> None:
         """
@@ -54,14 +52,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         # if no IP adress is provided, try to detect one:
         try:
             self.pulser = self._pulsestreamer.PulseStreamer(self.address)
-            logger.info(
-                f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
-            )
-            print("Connected.\n-------------------------------------------\n")
+            logger.info(f"Pulse Streamer connected at {self.address}", extra=DONE)
         except AssertionError:
             logger.exception(
-                f"No pulse streamer with the IP address {self.address}".ljust(65, ".")
-                + "[failed]"
+                f"No pulse streamer with the IP address {self.address}", extra=FAILED
             )
 
     def close(self) -> None:
@@ -83,22 +77,19 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
             self.pulser.forceFinal()
             # print a text if the program has successfully ended
             if not self.pulser.isStreaming():
-                print("Stop PulseStreamer: The sequence has been stoped.")
                 logger.info(
-                    "Pulse Streamer: stopped pulse sequence execution".ljust(65, ".")
-                    + "[done]"
+                    "Pulse Streamer: stopped pulse sequence execution", extra=DONE
                 )
             else:
                 logger.warning(
                     "Warning full_pulse_listtreamer.stop(): The sequence could\
-                            not be stoped".ljust(65, ".")
-                    + "[done]"
+                            not be stoped",
+                    extra=DONE,
                 )
 
         except AttributeError:
             logger.exception(
-                "Pulse Streamer: error stopping pulse sequence".ljust(65, ".")
-                + "[done]"
+                "Pulse Streamer: error stopping pulse sequence", extra=DONE
             )
 
     def writeDigSeq(self, channel_key: str) -> list[tuple[int, int]]:
@@ -226,8 +217,9 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         if self.pulser.isStreaming() is True:
             self.sequence.plot()
         else:
-            print(
-                "Warning (plot_sequence()): No sequence is streaming in the self._pulsestreamer.PulseStreamer."
+            logger.warning(
+                "plot_sequence(): No sequence is streaming in the PulseStreamer.",
+                extra=WARNING,
             )
 
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
@@ -257,8 +249,8 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
                 if total_duration - round(total_duration) != 0:
                     logger.warning(
                         "Warning: The total duration is not multiple of the\
-                                sampling time and is being rounded!".ljust(65, ".")
-                        + "[WARNING]"
+                                sampling time and is being rounded!",
+                        extra=WARNING,
                     )
                     self.total_duration = int(round(total_duration))
                 else:
@@ -316,12 +308,10 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
             while self.pulser.isStreaming():
                 pass
             # check if the sequence has been started correctly.
-            logger.info("Pulse Strearmer: sent run signal".ljust(65, ".") + "[done]")
+            logger.info("Pulse Strearmer: sent run signal", extra=DONE)
 
         except AttributeError:
-            logger.exception(
-                "Pulse Strearmer: problem setting to run".ljust(65, ".") + "[done]"
-            )
+            logger.exception("Pulse Strearmer: problem setting to run", extra=DONE)
 
     def trigger(self) -> None:
         """
@@ -331,6 +321,4 @@ class PStreamer(Synchroniser, synchroniser_types=("SwabInstPS",)):
         """
         self.pulser.rearm()
         self.pulser.startNow()
-        logger.info(
-            "Pulse Strearmer: Sent signal to play sequence".ljust(65, ".") + "[done]"
-        )
+        logger.info("Pulse Strearmer: Sent signal to play sequence", extra=DONE)

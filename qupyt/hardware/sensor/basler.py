@@ -6,6 +6,7 @@ import numpy as np
 
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED
 
 from .base import Sensor
 
@@ -121,8 +122,7 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
             grab_result.Release()
         time_2 = time()
         logger.info(
-            f"Basler data acquisition took {time_2 - time_1} s".ljust(65, ".")
-            + "[done]"
+            f"Basler data acquisition took {time_2 - time_1} s", extra=DONE
         )
         return arr
 
@@ -188,14 +188,12 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
             self.roi_shape = roi_shape_h_and_w
             logger.info(
                 f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
-                + "[done]"
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}", extra=DONE
             )
         except Exception as exc:
             logger.exception(
                 f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width {roi_shape_h_and_w[1]}\n\
-                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(65, ".")
-                + "[failed]"
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}", extra=FAILED
             )
             raise exc
 
@@ -209,10 +207,10 @@ class BaslerCam(Sensor, sensor_types=("Basler1920",)):
 
     def open(self) -> None:
         """Opens camera."""
-        logger.info("Opening Balser".ljust(65, ".") + "[done]")
+        logger.info("Opening Balser", extra=DONE)
 
     def close(self) -> None:
         """Closes the the camera.
         A new camera instance may now be created."""
         self.cam.Close()
-        logger.info("Closed Basler camera connection".ljust(65, ".") + "[done]")
+        logger.info("Closed Basler camera connection", extra=DONE)

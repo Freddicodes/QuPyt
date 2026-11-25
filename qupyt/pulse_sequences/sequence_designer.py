@@ -7,9 +7,9 @@ from typing import Any
 
 import numpy as np
 import yaml
-from termcolor import colored
 
 from qupyt.config import get_settings
+from qupyt.utils.logging import DONE, WARNING
 
 logger = logging.getLogger(__name__)
 
@@ -138,20 +138,8 @@ class PulseSequence:
         self.awg_sources = awg_sources
 
         if not np.isclose(points, self.num_points, rtol=0.0, atol=1e-9):
-            print(
-                colored(
-                    "WARNING! the sequence duration is not an integer multiple of samples".ljust(
-                        65, "."
-                    )
-                    + "! [WARNING]",
-                    "red",
-                )
-            )
             logger.warning(
-                "The sequence duration is not an integer multiple of samples".ljust(
-                    65, "."
-                )
-                + "[WARNING]"
+                "The sequence duration is not an integer multiple of samples", extra=WARNING
             )
 
         #  5 => 1 for analog, 4 for 8 bit marker.
@@ -165,30 +153,10 @@ class PulseSequence:
     def time_to_index(self, time: float) -> int:
         points = self.samp_rate * time * 1e-6
         if not np.isclose(points, int(round(points))):
-            print(
-                colored(
-                    "WARNING! the start or duration time is not an integer multiple of samples".ljust(
-                        65, "."
-                    )
-                    + "! "
-                    "[WARNING]",
-                    "red",
-                )
-            )
-            print(
-                colored(
-                    f"WARNING! {points} comp. to {int(round(points))}".ljust(
-                        65, "."
-                    )
-                    + "! [WARNING]",
-                    "red",
-                )
-            )
             logger.warning(
-                "The start of duration is not an integer mulitple of samples".ljust(
-                    65, "."
-                )
-                + "[WARNING]"
+                "The start of duration is not an integer mulitple of samples "
+                f"({points} comp. to {int(round(points))})",
+                extra=WARNING,
             )
             self.warning_counter += 1
         return int(round(points))
@@ -236,10 +204,7 @@ class PulseSequence:
 
     def make(self, name: str) -> None:
         logger.info(
-            f"There where {self.warning_counter} warnings in PS generation".ljust(
-                65, "."
-            )
-            + "[done]"
+            f"There where {self.warning_counter} warnings in PS generation", extra=DONE
         )
         final = np.zeros((self.numseqs, 2 * len(self.awg_sources), self.num_points))
         for source_index, source in enumerate(self.awg_sources):
@@ -267,7 +232,7 @@ class PulseSequence:
             self.properties,
             self.flag_channels,
         )
-        logger.info(f"Pulse sequence written to {name}".ljust(65, ".") + "[done]")
+        logger.info(f"Pulse sequence written to {name}", extra=DONE)
 
 
 class PulseBlasterSequence:

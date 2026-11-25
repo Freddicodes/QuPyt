@@ -7,6 +7,7 @@ import numpy as np
 
 from qupyt.exceptions import ConfigurationError
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED, INFO, WARNING
 
 from .base import Sensor
 
@@ -164,10 +165,8 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
             logger.warning(
                 f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n"
-                + "does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
-                    65, "."
-                )
-                + "[warning]"
+                + "does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.",
+                extra=WARNING,
             )
 
         # Checking size compatibility of chosen FOV.
@@ -205,17 +204,13 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
             self.roi_shape = [roi_shape_h_and_w[0] * 4, roi_shape_h_and_w[1]]
             logger.info(
-                f"Set Sensor roi to height: {roi_shape_h_and_w[0] * 4} and width: {roi_shape_h_and_w[1]}\n".ljust(
-                    65, "."
-                )
-                + "[done]"
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0] * 4} and width: {roi_shape_h_and_w[1]}\n",
+                extra=DONE,
             )
         except Exception as exc:
             logger.exception(
-                f"Failed to set roi of height: {roi_shape_h_and_w[0] * 4} and width: {roi_shape_h_and_w[1]}\n".ljust(
-                    65, "."
-                )
-                + "[failed]"
+                f"Failed to set roi of height: {roi_shape_h_and_w[0] * 4} and width: {roi_shape_h_and_w[1]}\n",
+                extra=FAILED,
             )
             raise exc
 
@@ -244,10 +239,8 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         self.cam.stop()
 
         logger.info(
-            f"The real framerate calculated by the timing of the camera is {1 / ((timesteps[self.number_measurements - 1] - timesteps[0]) * 1e-6 / (self.number_measurements - 1))} Hz".ljust(
-                65, "."
-            )
-            + "[info]"
+            f"The real framerate calculated by the timing of the camera is {1 / ((timesteps[self.number_measurements - 1] - timesteps[0]) * 1e-6 / (self.number_measurements - 1))} Hz",
+            extra=INFO,
         )
 
         return data
@@ -294,4 +287,4 @@ class GenICamPhantom(Sensor, sensor_types=("PhantomS710",)):
         self.cam_instance = None
         self.grabber = None
         gc.collect()
-        logger.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        logger.info("Closed GenICam camera connection", extra=DONE)

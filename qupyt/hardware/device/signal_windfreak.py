@@ -5,6 +5,7 @@ from pydantic import validate_call
 
 from qupyt.utils.decorators import coerce_device_config_shape, loop_inputs
 from qupyt.utils.imports import install_hint
+from qupyt.utils.logging import DONE, FAILED
 from qupyt.utils.types import ChannelValue, ParameterInput
 
 from .signal_source import SignalSource
@@ -21,14 +22,9 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
         super().__init__(configuration)
         try:
             self.instance: serial.Serial = serial.Serial(self.address, timeout=1)
-            logger.info(
-                f"Connected to WindFreak on {address}".ljust(65, ".") + "[done]"
-            )
+            logger.info(f"Connected to WindFreak on {address}", extra=DONE)
         except serial.SerialException:
-            logger.error(
-                f"Connection to WindFreak on {address} failed".ljust(65, ".")
-                + "[failed]"
-            )
+            logger.error(f"Connection to WindFreak on {address} failed", extra=FAILED)
             raise
 
         self._set_power_level(power_level=1)
@@ -47,7 +43,7 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
     def set_amplitude(self, ampl: ChannelValue) -> None:
         _channel, ampl = ampl
         self.instance.write(f"a{ampl}".encode())  # min 0 , max 63
-        logger.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
+        logger.info(f"Windfreak set amplitude to {ampl}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -56,7 +52,7 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
         _channel, freq = freq
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 1)}".encode())
-        logger.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
+        logger.info(f"Windfreak set frequency to [MHz] {freq}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -65,7 +61,7 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
         # High - 1, Low - 0
         _channel, power_level = power_level
         self.instance.write(f"h{power_level}".encode())
-        logger.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
+        logger.info(f"Windfreak power level set to {power_level}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -73,12 +69,12 @@ class WindFreakSNV(SignalSource, device_types=("WindFreakSNV",)):
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         _channel, on_off = on_off
         self.instance.write(f"o{on_off}".encode())
-        logparam = "[ON]" if on_off == 1 else "[OFF]"
-        logger.info("WindFreak output set".ljust(65, ".") + logparam)
+        logparam = "ON" if on_off == 1 else "OFF"
+        logger.info(f"WindFreak output set {logparam}", extra=DONE)
 
     def close(self) -> None:
         self.instance.close()
-        logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
+        logger.info("WindFreak instance closed", extra=DONE)
 
 
 class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
@@ -106,7 +102,7 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
         channel, ampl = ampl
         self.instance.write(f"C{channel}".encode())
         self.instance.write(f"W{ampl}".encode())  # min 0 , max 63
-        logger.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
+        logger.info(f"Windfreak set amplitude to {ampl}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -116,7 +112,7 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
         self.instance.write(f"C{channel}".encode())
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
-        logger.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
+        logger.info(f"Windfreak set frequency to [MHz] {freq}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -125,7 +121,7 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
         # High - 1, Low - 0
         _channel, power_level = power_level
         self.instance.write(f"h{power_level}".encode())
-        logger.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
+        logger.info(f"Windfreak power level set to {power_level}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -133,12 +129,12 @@ class WindFreakHDM(SignalSource, device_types=("WindFreakHDM",)):
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         _channel, on_off = on_off
         self.instance.write(f"o{on_off}".encode())
-        logparam = "[ON]" if on_off == 1 else "[OFF]"
-        logger.info("WindFreak output set".ljust(65, ".") + logparam)
+        logparam = "ON" if on_off == 1 else "OFF"
+        logger.info(f"WindFreak output set {logparam}", extra=DONE)
 
     def close(self) -> None:
         self.instance.close()
-        logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
+        logger.info("WindFreak instance closed", extra=DONE)
 
 
 class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
@@ -172,9 +168,7 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
         channel = int(channel)
         ampl = float(ampl)
         self.instance[channel].power = ampl
-        logger.info(
-            f"Windfreak set amplitude channel{channel} to".ljust(65, ".") + f"{ampl}"
-        )
+        logger.info(f"Windfreak set amplitude channel{channel} to {ampl}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -186,16 +180,14 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
         # might need rouding
         self.instance[channel].frequency = freq
         logger.info(
-            f"Windfreak set channel {channel} frequency to [Hz]".ljust(65, ".")
-            + f"{freq}"
+            f"Windfreak set channel {channel} frequency to [Hz] {freq}", extra=DONE
         )
 
     # def _set_power_level(self, power_level: ParameterInput) -> None:
     #     # High - 1, Low - 0
     #     _channel, power_level = power_level
     #     self.instance.write(f"h{power_level}".encode())
-    #     logger.info("Windfreak power level set to".ljust(
-    #         65, ".") + f"{power_level}")
+    #     logger.info(f"Windfreak power level set to {power_level}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -205,12 +197,12 @@ class WindFreakOfficial(SignalSource, device_types=("WindFreak",)):
         channel = int(channel)
         on_off = on_off == 1
         self.instance[channel].enable = on_off
-        logparam = "[ON]" if on_off == 1 else "[OFF]"
-        logger.info("WindFreak output set".ljust(65, ".") + logparam)
+        logparam = "ON" if on_off == 1 else "OFF"
+        logger.info(f"WindFreak output set {logparam}", extra=DONE)
 
     def close(self) -> None:
         self.instance.close()
-        logger.info("WindFreak instance closed".ljust(65, ".") + "[done]")
+        logger.info("WindFreak instance closed", extra=DONE)
 
 
 class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
@@ -233,7 +225,7 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
         channel = int(channel)
         ampl = float(ampl)
         self.instance.write(f"W{ampl}".encode())  # min -13.000, max 20.000
-        logger.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
+        logger.info(f"Windfreak set amplitude to {ampl}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -244,7 +236,7 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
         freq = float(freq)
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
-        logger.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
+        logger.info(f"Windfreak set frequency to [MHz] {freq}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -253,7 +245,7 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
         _channel, power_level = power_level
         # High - 1, Low - 0;  only in high power mode the output actually changes with the assigned dBm
         self.instance.write(f"h{power_level}".encode())
-        logger.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
+        logger.info(f"Windfreak power level set to {power_level}", extra=DONE)
 
     @validate_call
     @coerce_device_config_shape
@@ -261,8 +253,8 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         _channel, on_off = on_off
         self.instance.write(f"E{on_off}".encode())
-        logparam = "[ON]" if on_off == 1 else "[OFF]"
-        logger.info("WindFreak output set".ljust(65, ".") + logparam)
+        logparam = "ON" if on_off == 1 else "OFF"
+        logger.info(f"WindFreak output set {logparam}", extra=DONE)
 
     def __repr__(self) -> str:
         return f"WindFreak SynthHD Mini (address: {self.address})"
@@ -272,4 +264,4 @@ class WindFreakSHDMini(SignalSource, device_types=("WindFreakSHDMini",)):
 
     def close(self) -> None:
         self.instance.close()
-        logger.info("WindFreak SynthHD Mini instance closed".ljust(65, ".") + "[done]")
+        logger.info("WindFreak SynthHD Mini instance closed", extra=DONE)

@@ -25,3 +25,5 @@ class _Status(StrEnum):
 START = {"status": "START"}
 DONE = {"status": "DONE"}
 FAILED = {"status": "FAILED"}
+WARNING = {"status": "WARNING"}
+INFO = {"status": "INFO"}

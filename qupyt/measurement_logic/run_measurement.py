@@ -17,6 +17,7 @@ from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.hardware.sensor import Sensor
 from qupyt.hardware.synchroniser import Synchroniser
 from qupyt.measurement_logic.data_handling import Data
+from qupyt.utils.logging import DONE
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,7 @@ def run_measurement(
                     get_settings().sequence_dir / f"sequence_{ps_itervalue}.yaml"
                 )
             else:
-                logger.info(
-                    "Skipped synchroniser sequence upload".ljust(65, ".") + "[done]"
-                )
+                logger.info("Skipped synchroniser sequence upload", extra=DONE)
             synchroniser.run()
             sleep(0.1)
             sensor.open()
@@ -86,8 +85,7 @@ def run_measurement(
                     data_container.update_data(data, ps_itervalue, itervalue, avg)
             dynamic_devices.current_dynamic_step = 0
         return_status = "success"
-    except Exception as e:
-        print(f"exc {e}")
+    except Exception:
         logger.exception("An error occured during the measurement!")
         return_status = "failed"
     finally:

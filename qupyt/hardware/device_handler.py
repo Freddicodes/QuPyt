@@ -17,6 +17,7 @@ import numpy as np
 from pydantic import validate_call
 
 from qupyt.hardware.device.base import Device
+from qupyt.utils.logging import DONE
 from qupyt.utils.types import DynamicParameterInput
 
 logger = logging.getLogger(__name__)
@@ -79,9 +80,7 @@ class DeviceHandler:
             if (key, value["address"]) not in requested_name_address_tuples:
                 self.devices[key]["device"].close()
                 rem = self.devices.pop(key)
-                logger.info(
-                    f"Removed {rem} from active devices dict".ljust(65, ".") + "[done]"
-                )
+                logger.info(f"Removed {rem} from active devices dict", extra=DONE)
 
     def open_new_requested_devices(self) -> None:
         """
@@ -100,18 +99,14 @@ class DeviceHandler:
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 logger.info(
-                    f"Added {self.devices[key]['device']!r} to active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
+                    f"Added {self.devices[key]['device']!r} to active devices dict",
+                    extra=DONE,
                 )
             else:
                 self.devices[key]["config"] = value["config"]
                 logger.info(
-                    f"Updated {self.devices[key]['device']!r} in active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
+                    f"Updated {self.devices[key]['device']!r} in active devices dict",
+                    extra=DONE,
                 )
 
     def set_all_params(self) -> None:
@@ -194,18 +189,14 @@ class DynamicDeviceHandler(DeviceHandler):
                 self.devices[key]["device"] = device
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
                 logger.info(
-                    f"Added {self.devices[key]['device']!r} to active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
+                    f"Added {self.devices[key]['device']!r} to active devices dict",
+                    extra=DONE,
                 )
             else:
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
                 logger.info(
-                    f"Updated {self.devices[key]['device']!r} in active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
+                    f"Updated {self.devices[key]['device']!r} in active devices dict",
+                    extra=DONE,
                 )
         self._reset_step_counter()
         self._make_sweep_lists()
