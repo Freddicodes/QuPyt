@@ -90,6 +90,28 @@ def _set_ready() -> None:
         file.write("ready")
 
 
+def _read_instruction_file(path: Path) -> dict | None:
+    """
+    Read an instruction YAML file. Retry once in case it is still being
+    written; return None (and leave the file in place) if it is still
+    missing, invalid or not a mapping.
+    """
+    for attempt in range(2):
+        if attempt:
+            time.sleep(0.5)
+        try:
+            with open(path, "r", encoding="utf-8") as file:
+                params = yaml.safe_load(file)
+        except (FileNotFoundError, yaml.YAMLError) as excpt:
+            problem = repr(excpt)
+            continue
+        if isinstance(params, dict):
+            return params
+        problem = f"content is {type(params).__name__}, not a mapping"
+    logger.error(f"Could not read instruction file {path} ({problem}), skipping it.")
+    return None
+
+
 def parse_input() -> None:
     static_devices = DeviceHandler({})
     dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
@@ -123,16 +145,8 @@ def parse_input() -> None:
 
             logger.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
 
-            # Retry reading the file in case it's still being written
-            for attempt in range(3):
-                try:
-                    with open(instruction_file, "r", encoding="utf-8") as file:
-                        params = yaml.safe_load(file)
-                    break
-                except FileNotFoundError:
-                    time.sleep(0.1)  # wait 100ms
-            else:
-                print(f"File still missing after retries, skipping: {instruction_file}")
+            params = _read_instruction_file(instruction_path)
+            if params is None:
                 processed_files.discard(file_key)
                 continue
 
