@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "qupyt"
 dynamic = ["version"]
 description = "Provide a framework for quantum sensing experiments"
-license = {text = "No license of for commercial or non-commercial use is granted"}
+# license = {text = "No license of for commercial or non-commercial use is granted"}
 requires-python = ">=3.14"
 dependencies = [
     "numpy",
@@ -39,8 +39,8 @@ docs = ["sphinx>=4.0", "sphinx_rtd_theme>=1.0"]
 [project.scripts]
 qupyt = "qupyt.main:main"
 
-[tool.setuptools.packages]
-find = {}
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools_scm]
 version_file = "qupyt/_version.py"
