@@ -33,7 +33,7 @@ synchroniser:
     START: 2
 
 
-dynamic_steps: &n_dynamic_steps 1 #  not necessary but dynamic_steps needs to be assigned
+dynamic_steps: 1 #  not necessary but dynamic_steps needs to be assigned
 dynamic_devices:
 static_devices:
   mw_source:
@@ -50,7 +50,6 @@ static_devices:
 # Data
 data:
   averaging_mode: 'spread'
-  dynamic_steps: *n_dynamic_steps
 
 
 # Pulse Sequence

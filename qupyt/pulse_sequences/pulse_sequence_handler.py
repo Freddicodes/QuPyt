@@ -74,7 +74,10 @@ def update_params_dict(
         return params
     for key, value in update_params.items():
         if isinstance(value, dict):
-            params[key] = update_params_dict(params.get(key, {}), value)
+            existing = params.get(key)
+            if not isinstance(existing, dict):
+                existing = {}
+            params[key] = update_params_dict(existing, value)
         else:
             params[key] = value
     return params

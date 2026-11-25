@@ -96,7 +96,9 @@ class DeviceHandler:
         ]
         for key, value in list(self.requested_devices.items()):
             if (key, value["address"]) not in current_name_address_tuples:
-                device = Device.create(value)
+                device = Device.create(
+                    value["device_type"], value["address"], value["config"]
+                )
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 logger.info(
@@ -185,11 +187,8 @@ class DynamicDeviceHandler(DeviceHandler):
         ]
         for key, value in list(self.requested_devices.items()):
             if (key, value["address"]) not in current_name_address_tuples:
-                # Remove config dicts.
-                # These will be updated for every new value.
-                creation_dict = copy.deepcopy(value)
-                creation_dict["config"] = {}
-                device = Device.create(creation_dict)
+                # Created without config; values are set for every dynamic step.
+                device = Device.create(value["device_type"], value["address"], {})
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])

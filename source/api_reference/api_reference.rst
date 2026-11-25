@@ -15,3 +15,4 @@ Here you will find documentation on how to use the different classes.
    signal_sources
    device_handler
    power_supplies
+   data_handling

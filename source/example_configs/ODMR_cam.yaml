@@ -34,7 +34,7 @@ synchroniser:
     LASER: 8
     READ: 1
 
-dynamic_steps: &n_dynamic_steps 10
+dynamic_steps: 10
 
 # List devices that are supposed to update their
 # ouput values for each dynamic step.
@@ -75,8 +75,7 @@ data:
   # sum: Summs up all indiviudal number_measurements for each dynamic step.
   # See docs for more details.
   averaging_mode: 'sum'
-  dynamic_steps: *n_dynamic_steps
-  compress: false
+  live_compression: false
   reference_channels: 2
 
 

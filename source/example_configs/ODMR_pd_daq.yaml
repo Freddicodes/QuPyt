@@ -35,7 +35,7 @@ synchroniser:
     MW: 0
     START: 2
 
-dynamic_steps: &n_dynamic_steps 10
+dynamic_steps: 10
 
 # List devices that are supposed to update their
 # ouput values for each dynamic step.
@@ -76,7 +76,6 @@ data:
   # sum: Summs up all indiviudal number_measurements for each dynamic step.
   # See docs for more details.
   averaging_mode: 'sum'
-  dynamic_steps: *n_dynamic_steps
   reference_channels: 2
 
 ps_path: '.\QuPyt\source\example_pulse_sequences\odmr_pd_daq.py'

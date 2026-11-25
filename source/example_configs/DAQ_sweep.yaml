@@ -35,7 +35,7 @@ synchroniser:
     MW: 0
     START: 2
 
-dynamic_steps: &n_dynamic_steps 1
+dynamic_steps: 1
 dynamic_devices:
 static_devices:
 
@@ -43,7 +43,6 @@ static_devices:
 
 data:
   averaging_mode: 'spread'
-  dynamic_steps: *n_dynamic_steps
 
 ps_path: '.\QuPyt\source\example_pulse_sequences\daq_sweep.py'
 

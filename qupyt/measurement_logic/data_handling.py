@@ -1,230 +1,193 @@
+"""
+Measurement data container. Axes: ``(channel, ps_step, dynamic_step, measurement, *roi)``.
+See ``source/measurement_flow.rst`` for details.
+"""
+
 import logging
-from typing import Any
+from dataclasses import dataclass
+from enum import StrEnum
+from os import PathLike
+from typing import Any, Self
 
 import numpy as np
+import yaml
+from pydantic import BaseModel, ConfigDict, NonNegativeInt, PositiveInt
 
 from qupyt.hardware.sensor import Sensor
-from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
+
+logger = logging.getLogger(__name__)
 
 
-class Data(ConfigurationMixin):
-    attribute_map: UpdateConfigurationType
+class AveragingMode(StrEnum):
+    SUM = "sum"
+    SPREAD = "spread"
 
-    def __init__(self, configuration: dict[str, Any]) -> None:
-        self.roi_shape: list[int]
-        self.averaging_mode: str
-        self.number_dynamic_steps: int
-        self.number_measurements: int
-        self.data_type: type
-        self.live_compression: bool = False
-        self.number_pulse_sequences: int = 1
-        self.save_in_chunks: int = 0
-        self.reference_channels: int = 2
-        self.data: np.ndarray
-        self.chunk_data: np.ndarray
-        self.chunk_save_index: int = 0
-        self.filename: tuple[str, str]
-        self.attribute_map = {
-            "dynamic_steps": self._set_number_dynamic_steps,
-            "ps_steps": self._set_number_pulse_sequences,
-            "averaging_mode": self._set_averaging_mode,
-            "number_measurements": self._set_number_measurements,
-            "roi_shape": self._set_roi_shape,
-            "compress": self._set_compress_mode,
-            "live_compression": self._set_live_compression,
-            "save_in_chunks": self._set_save_chunk_size,
-            "reference_channels": self._set_reference_channels,
-        }
-        self._update_from_configuration(configuration)
 
-    def _set_save_chunk_size(self, save_in_chunks: int) -> None:
-        self.save_in_chunks = save_in_chunks
+class DataConfig(BaseModel):
+    """The ``data:`` block of a measurement YAML file."""
 
-    def _set_reference_channels(self, reference_channels: int) -> None:
-        self.reference_channels = int(reference_channels)
+    model_config = ConfigDict(extra="forbid")
 
-    def _set_compress_mode(self, compression_value: bool) -> None:
-        logging.warning(
-            "Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead"
-        )
-        self.live_compression = compression_value
+    averaging_mode: AveragingMode
+    reference_channels: PositiveInt = 2
+    live_compression: bool = False
+    save_in_chunks: NonNegativeInt = 0
 
-    def _set_live_compression(self, live_compression: bool) -> None:
-        self.live_compression = live_compression
 
-    def _set_dtype_from_sensor(self, sensor: Sensor) -> None:
-        self.data_type = sensor.target_data_type
+@dataclass(frozen=True)
+class MeasurementShape:
+    """Sizes of every data axis. The measurement loops iterate over these."""
 
-    def _set_number_dynamic_steps(self, number_dynamic_steps: int) -> None:
-        if number_dynamic_steps < 1:
-            raise ValueError("""Cannot have fewer than 1 dynamic steps. This will result in an empty measurement.
-            If you measure just one step, this is still ONE dynamic step. The first of one.""")
-        self.number_dynamic_steps = int(number_dynamic_steps)
+    channels: int
+    ps_steps: int
+    dynamic_steps: int
+    measurements_per_channel: int
+    roi: tuple[int, ...]
 
-    def _set_number_pulse_sequences(self, number_pulse_sequences: int) -> None:
-        self.number_pulse_sequences = int(number_pulse_sequences)
-
-    def _set_averaging_mode(self, averaging_mode: str) -> None:
-        self.averaging_mode = str(averaging_mode)
-
-    def _set_number_measurements(self, number_measurements: int) -> None:
-        self.number_measurements = number_measurements
-
-    def _set_roi_shape(self, roi_shape: list[int]) -> None:
-        self.roi_shape = roi_shape
-
-    def _set_filename(self, filename: tuple[str, str]) -> None:
-        self.filename = filename
-
-    def set_filename(self, filename: tuple[str, str]) -> None:
-        self._set_filename(filename)
-
-    def set_dims_from_sensor(self, sensor: Sensor) -> None:
-        self._set_ROI_from_sensor(sensor)
-        self._set_number_measurements_from_sensor(sensor)
-        if hasattr(sensor, "target_data_type"):
-            self._set_dtype_from_sensor(sensor)
-
-    def _set_ROI_from_sensor(self, sensor: Sensor) -> None:
-        self.roi_shape = sensor.roi_shape
-
-    def _set_number_measurements_from_sensor(self, sensor: Sensor) -> None:
-        self.number_measurements = sensor.number_measurements
-
-    def create_array(self) -> None:
-        # HeliCam gets number_images, whereas other get number_images / 2.
-        # I suggest fixing this as number_images
-        # Specifics have then to be dealt with in each class.
-        if self.live_compression:
-            self.roi_shape = [1]
-            self.data_type = float
-        if self.averaging_mode == "sum":
-            data_array_dim = [
-                self.reference_channels,
-                self.number_pulse_sequences,
-                self.number_dynamic_steps,
-                1,
-                *self.roi_shape,
-            ]
-        elif self.averaging_mode == "spread":
-            measurements_per_channel = (
-                self.number_measurements / self.reference_channels
+    @classmethod
+    def from_params(
+        cls, params: dict[str, Any], sensor: Sensor, config: DataConfig
+    ) -> Self:
+        ps_steps = int(params.get("pulse_sequence_steps", 1))
+        dynamic_steps = int(params.get("dynamic_steps", 1))
+        if ps_steps < 1 or dynamic_steps < 1:
+            raise ValueError(
+                f"pulse_sequence_steps ({ps_steps}) and dynamic_steps ({dynamic_steps}) "
+                "must be at least 1."
             )
-            if measurements_per_channel != int(measurements_per_channel):
-                raise ValueError(f"""Your number of measurements {self.number_measurements} is not divisible by the number of channels {self.reference_channels}.
-                Please make sure the number of measurements you want to recored can be distributed accross the reference channels. (I.e. number_measurements is divisible by reference_cannels""")
-            data_array_dim = [
-                self.reference_channels,
-                self.number_pulse_sequences,
-                self.number_dynamic_steps,
-                int(measurements_per_channel),
-                *self.roi_shape,
-            ]
+
+        channels = config.reference_channels
+        number_measurements = int(sensor.number_measurements)
+        if number_measurements % channels != 0:
+            raise ValueError(
+                f"number_measurements ({number_measurements}) must be divisible by "
+                f"data.reference_channels ({channels})."
+            )
+
+        if config.averaging_mode == AveragingMode.SPREAD:
+            measurements_per_channel = number_measurements // channels
         else:
-            logging.info(
-                f"Failed to crearte dara array for mode {self.averaging_mode}".ljust(
-                    65, "."
-                )
-                + "[failed]"
-            )
-            raise ValueError(f"averaging_mode {self.averaging_mode} not available")
-        logging.info(
-            f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
+            measurements_per_channel = 1
+        roi = (
+            (1,) if config.live_compression else tuple(int(n) for n in sensor.roi_shape)
         )
-        self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
-        self.chunk_data = np.zeros_like(self.data)
 
-    def update_data(
-        self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int
-    ) -> None:
-        if self.live_compression:
-            self._update_data_compressed(data, ps_step, dynamic_step)
-            if self.save_in_chunks != 0:
-                self._update_data_compressed(
-                    data, ps_step, dynamic_step, target_array=self.chunk_data
-                )
-        else:
-            self._update_data_full(data, ps_step, dynamic_step)
-            if self.save_in_chunks != 0:
-                self._update_data_full(
-                    data, ps_step, dynamic_step, target_array=self.chunk_data
-                )
-        if self.save_in_chunks != 0 and (avg_step + 1) % self.save_in_chunks == 0:
-            self.save(
-                self.filename[0]
-                + "_ch-"
-                + f"{self.chunk_save_index}_"
-                + self.filename[1],
-                source_data=self.chunk_data,
-                average_count=self.save_in_chunks,
+        return cls(channels, ps_steps, dynamic_steps, measurements_per_channel, roi)
+
+    @property
+    def axes(self) -> tuple[str, ...]:
+        roi_axes = tuple(f"roi_{i}" for i in range(len(self.roi)))
+        return ("channel", "ps_step", "dynamic_step", "measurement", *roi_axes)
+
+    @property
+    def array_shape(self) -> tuple[int, ...]:
+        return (
+            self.channels,
+            self.ps_steps,
+            self.dynamic_steps,
+            self.measurements_per_channel,
+            *self.roi,
+        )
+
+
+class MeasurementData:
+    """
+    Accumulates sensor readouts into the measurement array.
+
+    Sums are kept in float64 regardless of the sensor dtype, so they cannot
+    overflow. Each ``(ps_step, dynamic_step)`` counts its own averages, so
+    :meth:`mean` is correct for incomplete (failed) runs as well.
+    """
+
+    def __init__(self, shape: MeasurementShape, config: DataConfig) -> None:
+        self.shape = shape
+        self.config = config
+        self._sum = np.zeros(shape.array_shape, dtype=np.float64)
+        self.averages = np.zeros((shape.ps_steps, shape.dynamic_steps), dtype=np.int64)
+        logger.info(
+            f"Created data array of shape {shape.array_shape}".ljust(65, ".") + "[done]"
+        )
+
+    def add(self, frames: np.ndarray, *, ps_step: int, dynamic_step: int) -> None:
+        """
+        Add one sensor readout of shape ``(number_measurements, *roi_shape)``
+        as one average of ``(ps_step, dynamic_step)``.
+        """
+        frames = np.asarray(frames, dtype=np.float64)
+        channels = self.shape.channels
+        if self.config.live_compression:
+            frames = frames.reshape(len(frames), -1).mean(axis=1, keepdims=True)
+        if frames.shape[1:] != self.shape.roi or len(frames) % channels:
+            raise ValueError(
+                f"Sensor returned shape {frames.shape}, expected "
+                f"(multiple of {channels}, *{self.shape.roi})."
             )
-            self.chunk_save_index += 1
-            self.chunk_data.fill(0)
 
-    def _update_data_full(
-        self,
-        data: np.ndarray,
-        ps_step: int,
-        dynamic_step: int,
-        target_array: np.ndarray | None = None,
-    ) -> None:
-        if target_array is None:
-            target_array = self.data
-        if self.averaging_mode == "sum":
-            for i in range(self.reference_channels):
-                target_array[i, ps_step, dynamic_step] += data[
-                    i :: self.reference_channels
-                ].sum(axis=0)
-            # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
-        elif self.averaging_mode == "spread":
-            for i in range(self.reference_channels):
-                target_array[i, ps_step, dynamic_step] += data[
-                    i :: self.reference_channels
-                ]
-                # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
+        # Frame k belongs to channel k % channels -> (channel, frame, *roi).
+        per_channel = frames.reshape(-1, channels, *self.shape.roi).swapaxes(0, 1)
+        if self.config.averaging_mode == AveragingMode.SUM:
+            per_channel = per_channel.sum(axis=1, keepdims=True)
 
-    def _update_data_compressed(
-        self,
-        data: np.ndarray,
-        ps_step: int,
-        dynamic_step: int,
-        target_array: np.ndarray | None = None,
-    ) -> None:
-        if target_array is None:
-            target_array = self.data
-        if self.averaging_mode == "sum":
-            for i in range(self.reference_channels):
-                ndim = data.ndim
-                target_array[i, ps_step, dynamic_step] += (
-                    data[i :: self.reference_channels]
-                    .mean(axis=tuple(range(1, ndim)))
-                    .sum(axis=0)
-                )
-        elif self.averaging_mode == "spread":
-            for i in range(self.reference_channels):
-                ndim = data.ndim
-                target_array[i, ps_step, dynamic_step] += (
-                    data[i :: self.reference_channels]
-                    .mean(axis=tuple(range(1, ndim)))
-                    .reshape(-1, 1)
-                )
+        self._sum[:, ps_step, dynamic_step] += per_channel
+        self.averages[ps_step, dynamic_step] += 1
 
-    def save(
-        self,
-        filename: str,
-        source_data: np.ndarray | None = None,
-        average_count: int | None = None,
-    ) -> None:
+    def mean(self) -> np.ndarray:
+        """Sum divided by the averages of each slot. NaN where no average was recorded."""
+        averages = self.averages.reshape(
+            1, *self.averages.shape, *(1,) * (self._sum.ndim - 3)
+        )
+        return np.divide(
+            self._sum,
+            averages,
+            out=np.full_like(self._sum, np.nan),
+            where=averages > 0,
+        )
+
+    def reset(self) -> None:
+        self._sum.fill(0)
+        self.averages.fill(0)
+
+    def save(self, filename: str | PathLike[str]) -> None:
         """
-        Save data (without metadata) to a .npy file.
-        :param filename: Name of the resulting data file.
-         During normal usage as part of QuPyt, this will be assigned by the
-         main measurement loop.
-        :type filename: str
+        Write ``<filename>.npz`` with the arrays ``data`` (see :meth:`mean`),
+        ``averages`` (per ``(ps_step, dynamic_step)``) and ``axes`` (axis names).
         """
-        if source_data is None:
-            source_data = self.data
-        if average_count is not None and average_count > 0:
-            np.save(filename, source_data / average_count)
-            return
-        np.save(filename, source_data)
+        np.savez(
+            filename,
+            data=self.mean(),
+            averages=self.averages,
+            axes=np.array(self.shape.axes),
+        )
+
+
+@dataclass(frozen=True)
+class Measurement:
+    """A saved measurement, as returned by :func:`load_measurement`."""
+
+    data: np.ndarray
+    averages: np.ndarray
+    axes: tuple[str, ...]
+    params: dict[str, Any]
+
+    def sel(self, **indices: int | slice) -> np.ndarray:
+        """
+        Index the data by axis name, e.g. ``m.sel(channel=0, dynamic_step=3)``.
+        Axes not named are kept whole.
+        """
+        unknown = set(indices) - set(self.axes)
+        if unknown:
+            raise KeyError(f"Unknown axes {sorted(unknown)}; available: {self.axes}")
+        return self.data[tuple(indices.get(axis, slice(None)) for axis in self.axes)]
+
+
+def load_measurement(filename: str | PathLike[str]) -> Measurement:
+    """
+    Load ``<filename>.npz`` and its ``<filename>.yaml``. The file extension
+    may be given or left out.
+    """
+    base = str(filename).removesuffix(".npz").removesuffix(".yaml")
+    with np.load(base + ".npz") as npz:
+        data, averages, axes = npz["data"], npz["averages"], tuple(npz["axes"].tolist())
+    with open(base + ".yaml", encoding="utf-8") as file:
+        params = yaml.safe_load(file)
+    return Measurement(data=data, averages=averages, axes=axes, params=params)

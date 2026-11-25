@@ -26,7 +26,7 @@ synchroniser:
     START: 2
     CALIB: 'C'  # AWG flag channel
 
-dynamic_steps: &n_dynamic_steps 120
+dynamic_steps: 120
 dynamic_devices:
   rf_calibration_source:
     address: 'TCPIP::some::INSTR'
@@ -43,7 +43,6 @@ static_devices:
 
 data:
   averaging_mode: 'spread'
-  dynamic_steps: *n_dynamic_steps
 
 ps_path: '.\QuPyt\source\example_pulse_sequences\casr_calibration.py'
 

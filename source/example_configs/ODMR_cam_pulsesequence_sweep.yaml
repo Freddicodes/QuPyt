@@ -35,7 +35,7 @@ synchroniser:
     READ: 1
 
 pulse_sequence_steps: &ps_steps 10
-dynamic_steps: &n_dynamic_steps 5
+dynamic_steps: 5
 
 # List devices that are supposed to update their
 # ouput values for each dynamic step.
@@ -76,10 +76,8 @@ data:
   # sum: Summs up all indiviudal number_measurements for each dynamic step.
   # See docs for more details.
   averaging_mode: 'sum'
-  dynamic_steps: *n_dynamic_steps
-  compress: false
+  live_compression: false
   reference_channels: 2
-  ps_steps: *ps_steps
 
 ps_path: '.\QuPyt\source\example_pulse_sequences\odmr_cam.py'
 pulse_sequence:

@@ -24,6 +24,7 @@ head over to our `github <https://github.com/KarDB/QuPyt.git>`_! Contributions a
    :caption: Contents:
 
    measurement_specification
+   measurement_flow
    api_reference/api_reference
    example_configs/example_configs
    example_pulse_sequences/example_pulse_sequences
