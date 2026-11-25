@@ -10,7 +10,7 @@ import time
 import traceback
 from datetime import date
 from pathlib import Path
-from queue import Empty, Queue
+from queue import Queue
 from time import sleep
 
 import yaml
@@ -115,7 +115,6 @@ def _read_instruction_file(path: Path) -> dict | None:
 def parse_input() -> None:
     static_devices = DeviceHandler({})
     dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
-    processed_files = set()  # track files already picked from the queue
     while not stop.is_set():
         if queue.empty():
             static_devices.update_devices({})
@@ -124,30 +123,22 @@ def parse_input() -> None:
             event_thread.wait(timeout=0.5)
             event_thread.clear()
             continue
+        running_file = None
+        success_status = "failed"
         try:
             _set_busy()
 
-            # Get the next file from the queue
-            try:
-                instruction_file = queue.get(timeout=1)
-            except Empty:
-                continue  # no file yet, check again
-
-            # Track files by full path + last modification time
+            # This is the only consumer, so the queue is not empty here
+            instruction_file = queue.get()
             instruction_path = Path(instruction_file)
             if not instruction_path.exists():
-                # File might have been removed; skip
+                # Already processed (duplicate event) or removed; skip
                 continue
-            file_key = (str(instruction_path), os.path.getmtime(instruction_path))
-            if file_key in processed_files:
-                continue  # already processed this instance
-            processed_files.add(file_key)
 
             logger.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
 
             params = _read_instruction_file(instruction_path)
             if params is None:
-                processed_files.discard(file_key)
                 continue
 
             # Use timestamped _running filename to avoid collisions
@@ -179,21 +170,17 @@ def parse_input() -> None:
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )
 
-            # Handle post-measurement file renames
-            if success_status == "success":
-                if os.path.exists(running_file):
-                    os.remove(running_file)
-            elif success_status == "failed":
-                failed_file = f"{instruction_file}_failed_{timestamp}"
-                if os.path.exists(running_file):
-                    os.replace(running_file, failed_file)
-
-            # Allow the same filename to be processed again in future
-            processed_files.discard(file_key)
-
         except Exception:
-            logger.exception("Excpetion in main measurement loop")
+            logger.exception("Exception in main measurement loop")
             traceback.print_exc()
+
+        finally:
+            # Rename the instruction file by outcome, also if anything raised
+            if running_file is not None and os.path.exists(running_file):
+                if success_status == "success":
+                    os.remove(running_file)
+                else:
+                    os.replace(running_file, f"{instruction_file}_failed_{timestamp}")
 
 
 class WaitingRoomEventHandler(PatternMatchingEventHandler):
