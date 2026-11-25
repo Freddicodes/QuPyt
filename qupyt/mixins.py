@@ -35,7 +35,8 @@ class ConfigurationMixin:
     ) -> None:
         for attr, value in configuration.items():
             try:
-                self.attribute_map[attr](value)
+                setter = self.attribute_map[attr]
             except KeyError:
-                logger.exception(f"Unknown attribute: {attr}")
-                raise KeyError(f"Unknown attribute: {attr}")
+                logger.error(f"Unknown attribute: {attr}")
+                raise KeyError(f"Unknown attribute: {attr}") from None
+            setter(value)
