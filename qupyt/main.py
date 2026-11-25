@@ -100,6 +100,7 @@ def parse_input() -> None:
             dynamic_devices.update_devices({})
             _set_ready()
             event_thread.wait(timeout=0.5)
+            event_thread.clear()
             continue
         try:
             _set_busy()
@@ -240,7 +241,6 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         """
         queue.put(event.src_path)
         event_thread.set()
-        event_thread.clear()
 
     def _on_modified(self, event: FileModifiedEvent) -> None:
         """
@@ -255,7 +255,6 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         queue.put(event.src_path)
         sleep(0.1)
         event_thread.set()
-        event_thread.clear()
 
     def _on_created(self, event) -> None:
         """
@@ -270,7 +269,6 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         queue.put(event.src_path)
         sleep(0.1)
         event_thread.set()
-        event_thread.clear()
 
     def _on_moved(self, event) -> None:
         """
@@ -285,7 +283,6 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         queue.put(event.src_path)
         sleep(0.1)
         event_thread.set()
-        event_thread.clear()
 
 
 def _get_observer_event_hanlder() -> WaitingRoomEventHandler:
